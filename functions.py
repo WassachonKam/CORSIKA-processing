@@ -25,8 +25,8 @@ def energyfluence(sumE2):
     return e0 * c * bin_width* sumE2 * 6.242e+18 # energy fluence in eV 
     
 # get electric filed files .dat
-def radiofile(primary, energy, sin2theta, runnum, ant):
-    return f'rawdata/{primary}/{energy}/sin2_{sin2theta}/{runnum:06d}/SIM{runnum:06d}_coreas/raw_ant_{ant}.dat'
+def radiofile(rawdata, primary, energy, sin2theta, runnum, ant):
+    return f'{rawdata}/{primary}/{energy}/sin2_{sin2theta}/{runnum:06d}/SIM{runnum:06d}_coreas/raw_ant_{ant}.dat'
 
 # |E|^2
 def magE2(Ex, Ey, Ez):
