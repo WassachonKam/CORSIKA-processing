@@ -166,6 +166,7 @@ def pltef(vxB, vxvxB, ef, eff, method):
     vxvxB = np.asarray(vxvxB)
     ef = np.asarray(ef)
     eff = np.asarray(eff)
+
     
     # select data on phi = 90 
     mask = (np.round(vxB, 3) == 0) & (vxvxB >= 0) #select x and y position only phi = 90
