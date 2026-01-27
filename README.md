@@ -20,7 +20,7 @@ All folders follow the same subdirectory structure, e.g.
 
 ## File Preparation
 
-1. Download the simulation data into `/rawdata`, or set the path to the simulation raw data.
+1. Download the simulation data into `/rawdata`, or set the path (in `./gather_DAT.sh`, and  `corsikaPlot.ipynb`) to the simulation raw data.
 2. Gather `DATxxxxxx` files from each subdirectory in `/rawdata` into `/DATfiles` using:
    ```bash
    ./gather_DAT.sh
