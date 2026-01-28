@@ -1,11 +1,13 @@
 #!/bin/bash
 
 primary_particle="proton"
-logE="18.0"
-sin2theta="0.4"
+logE="17.0"
+sin2theta="0.9"
 
 # Construct paths
-SRC="rawdata/${primary_particle}/lgE_${logE}/sin2_${sin2theta}"
+
+rawdata="/data/sim/IceCubeUpgrade/CosmicRay/Radio/coreas/data/continuous/star-pattern/"
+SRC="${rawdata}/${primary_particle}/lgE_${logE}/sin2_${sin2theta}"
 DEST="DATfiles/${primary_particle}/lgE_${logE}/sin2_${sin2theta}"
 
 # Create destination directory (including parent directories if not exist)
