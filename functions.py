@@ -10,6 +10,33 @@ from scipy import signal, fft, constants, optimize
 
 
 #=====================================
+# set primary particle parameters
+#=====================================
+
+primary = "proton"
+energy = "lgE_17.0"
+sin2theta = "0.4"
+runnum = 0
+
+#=====================================
+# file paths 
+#=====================================
+# need to set path to simulation raw data
+rawdata = "/data/sim/IceCubeUpgrade/CosmicRay/Radio/coreas/data/continuous/star-pattern" 
+
+fp_long = lambda primary, energy, sin2theta, runnum: f'{rawdata}/{primary}/{energy}/sin2_{sin2theta}/{runnum:06d}/DAT{runnum:06d}.long'
+fp_list = lambda primary, energy, sin2theta, runnum: f'{rawdata}/{primary}/{energy}/sin2_{sin2theta}/{runnum:06d}/SIM{runnum:06d}.list'
+fp_inp = lambda primary, energy, sin2theta, runnum: f'{rawdata}/{primary}/{energy}/sin2_{sin2theta}/{runnum:06d}/SIM{runnum:06d}.inp'
+fp_radio = lambda primary, energy, sin2theta, runnum, ant: f'{rawdata}/{primary}/{energy}/sin2_{sin2theta}/{runnum:06d}/SIM{runnum:06d}_coreas/raw_ant_{ant}.dat'
+fp_Nmu = lambda primary, energy, sin2theta, runnum: f'Particles/{primary}/{energy}/sin2_{sin2theta}/DAT{runnum:06d}_mupm.dat'
+fp_Ne = lambda primary, energy, sin2theta, runnum: f'Particles/{primary}/{energy}/sin2_{sin2theta}/DAT{runnum:06d}_epm.dat'
+fp_Nmu_tot = lambda primary, energy, sin2theta: f'Particles/{primary}/{energy}/sin2_{sin2theta}/TOTAL_mupm.dat'
+fp_Ne_tot = lambda primary, energy, sin2theta: f'Particles/{primary}/{energy}/sin2_{sin2theta}/TOTAL_epm.dat'
+fp_RadE = lambda primary, energy, sin2theta: f'radEnergy/{primary}_{energy}_{sin2theta}.dat'
+fp_radE_op = lambda primary, energy, sin2theta: f'radEnergy/{primary}_{energy}_{sin2theta}.dat'
+
+
+#=====================================
 # constants / math functions
 #=====================================
 
@@ -24,10 +51,6 @@ bin_width = 2e-10 #Time resolution
 def energyfluence(sumE2):
     return e0 * c * bin_width* sumE2 * 6.242e+18 # energy fluence in eV 
     
-# get electric filed files .dat
-def radiofile(rawdata, primary, energy, sin2theta, runnum, ant):
-    return f'{rawdata}/{primary}/{energy}/sin2_{sin2theta}/{runnum:06d}/SIM{runnum:06d}_coreas/raw_ant_{ant}.dat'
-
 # |E|^2
 def magE2(Ex, Ey, Ez):
     return np.abs(np.sqrt(Ex**2 + Ey**2 + Ez**2))**2
@@ -73,7 +96,61 @@ class GroundtoShowerCoordinates:
         dr = np.array([self.x, self.y, 0])
         return np.dot(dr, self.e2)
 
+# Radiation energy
+def RadEnergy(inpfile, Nant, ef, eff, ant_x, ant_y):
 
+    vxB, vxvxB,  = (np.empty(Nant) for _ in range(2))
+    ### shower coordinate ###
+    with open(inpfile) as f:
+        for line in f:
+            parts = line.split()
+            if parts[0] == "THETAP":
+                thetap = float(parts[1])
+            if parts[0] == "PHIP":
+                phip = float(parts[1])
+            elif parts[0] == "MAGNET":
+                Bx, Bz = float(parts[1]), -float(parts[2]) # input Bz possitive downward
+                By = 0
+                
+    # shower direction
+    theta = np.deg2rad(thetap)
+    phi   = np.deg2rad(phip)
+    
+    # calculation loop
+    for i in range(Nant):
+        g2s = GroundtoShowerCoordinates(ant_x[i], ant_y[i], [theta, phi], [Bx, By, Bz])
+        new_x = g2s.vxB()
+        new_y = g2s.vxvxB()
+        vxB[i] = new_x
+        vxvxB[i] = new_y
+    
+    
+    vxB = np.asarray(vxB)
+    vxvxB = np.asarray(vxvxB)
+    ef = np.asarray(ef)
+    eff = np.asarray(eff)
+
+    
+    # select data on phi = 90 
+    mask = (np.abs(vxB) < 1e-1) & (vxvxB >= 0) #select x and y position only phi = 90
+    r = vxvxB[mask]
+    f1 = ef[mask]
+    f2 = eff[mask]
+    
+    # r*f
+    rf1 = r * f1
+    rf2 = r * f2
+    
+    # trapezoidal integration
+    int_rf1 = integrate.trapezoid(rf1,r)
+    int_rf2 = integrate.trapezoid(rf2,r)
+    
+    # radiation energy calculation
+    rad_E1 = 2*np.pi*int_rf1
+    rad_E2 = 2*np.pi*int_rf2
+
+    return rad_E1, rad_E2, f1, f2 #raw and filtered
+    
 #=====================================
 # plotting functions 
 #=====================================
@@ -126,6 +203,8 @@ def pltNpar(parx, pary, parw, ptype): # number of particles on x, and y axes wit
     # ax1.set_aspect('equal')
     ax1.set_xlabel('x (m)')
     ax1.set_ylabel('y (m)')
+    # ax1.set_xlim(-1000, 1000)
+    # ax1.set_ylim(-1000, 1000)
     
     ax2 = fig.add_subplot(gs[0, 0], sharex=ax1)
     counts_par, bins_par, _ = ax2.hist(parx, bins=25,  weights = parw, histtype = hist, label = rf'${ptype}^{{\pm}}$')
@@ -169,14 +248,15 @@ def pltef(vxB, vxvxB, ef, eff, method):
 
     
     # select data on phi = 90 
-    mask = (np.round(vxB, 3) == 0) & (vxvxB >= 0) #select x and y position only phi = 90
+    mask = (np.abs(vxB) < 1e-1) & (vxvxB >= 0) 
+    # mask = (np.round(vxB, 3) == 0) & (vxvxB >= 0) #select x and y position only phi = 90
     r = vxvxB[mask]
     f1 = ef[mask]
     f2 = eff[mask]
     
     # r*f
-    rf1 = mullist(r,f1)
-    rf2 = mullist(r,f2)
+    rf1 = r * f1
+    rf2 = r * f2
     
     # trapezoidal integration
     int_rf1 = integrate.trapezoid(rf1,r)
@@ -203,6 +283,8 @@ def pltef(vxB, vxvxB, ef, eff, method):
         va='top'
     )
     plt.show()
+    return len(f1), len(f2)
+
 
 # plot energy fluence color map
 def pltefmap(finp, Nant, vxB, vxvxB, ant_x, ant_y, colors):
@@ -296,11 +378,12 @@ def pltlp(atmdepth, positron, electron, muplus, muminus, tot_e, tot_mu):
     axes[1].plot(muminus, atmdepth, label = r'$\mu^-$',  color = color_mu, ls = ':')
     axes[1].legend()
     axes[1].set_xlabel("particle number")
+    axes[1].set_title(f'{primary}, {energy}, sin2theta = {sin2theta}')
     
     axes[2].plot(tot_mu, atmdepth, label = r'$\mu^{\pm} (\times 50)$', color = color_mu)
     axes[2].plot(tot_e, atmdepth, label = r'$e^{\pm}$', color = color_e)
     axes[2].legend()
-    
+
     plt.gca().invert_yaxis()
     plt.show()
 
