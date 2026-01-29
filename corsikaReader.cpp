@@ -69,9 +69,9 @@ enum class SimType {Thinned, Standard};
 
 int main (int argc, char *argv[]) {
 
-    std::string primary = "iron";   // e.g. "proton"
-    std::string energy = "lgE_18.0";    // e.g. "lgE_16.0"
-    std::string theta = "sin2_0.4";     // e.g. "sin2_0.4"
+    std::string primary = "proton";   // e.g. "proton"
+    std::string energy = "lgE_17.0";    // e.g. "lgE_16.0"
+    std::string theta = "sin2_0.0";     // e.g. "sin2_0.4"
 
 
   if (argc < 3) {

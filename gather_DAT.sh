@@ -2,7 +2,7 @@
 
 primary_particle="proton"
 logE="17.0"
-sin2theta="0.9"
+sin2theta="0.0"
 
 # Construct paths
 
