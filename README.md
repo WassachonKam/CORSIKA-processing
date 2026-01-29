@@ -21,7 +21,7 @@ All folders follow the same subdirectory structure, e.g.
 ## File Preparation
 
 1. Set path (in `./gather_DAT.sh`, and  `corsikaPlot.ipynb`) to the simulation raw data.
-2. Gather `DATxxxxxx` files from each subdirectory in `/rawdata` into `/DATfiles` using:
+2. Gather `DATxxxxxx` files from each subdirectory in raw data path into `/DATfiles` using:
    ```bash
    ./gather_DAT.sh
 3. Decode Binary DATxxxxxx Files `make` and `./corsikaReader DATfiles/.../DATxxxxxx --thinned`. This step generates decoded particle files in the `/Particles` directory.
