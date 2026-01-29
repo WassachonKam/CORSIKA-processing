@@ -33,7 +33,7 @@ All folders follow the same subdirectory structure, e.g.
 Run the Jupyter notebook: `corsikaPlot.ipynb`
 
 
-## run radiation energy for multiple events
+## Calculating radiation energy for multiple events
 
 Run the python script: `RadiationEnergy.py`
 
