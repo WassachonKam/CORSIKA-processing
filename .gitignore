@@ -1,0 +1,12 @@
+# Ignore large data folders
+DATfiles/
+Particles/
+radEnergy/
+
+# Ignore Python cache and checkpoints
+__pycache__/
+.ipynb_checkpoints/
+
+# Ignore compiled files
+*.o
+corsikaReader
