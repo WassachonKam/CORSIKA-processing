@@ -20,14 +20,20 @@ All folders follow the same subdirectory structure, e.g.
 
 ## File Preparation
 
-1. Set path (in `./gather_DAT.sh`, and  `corsikaPlot.ipynb`) to the simulation raw data.
-2. Gather `DATxxxxxx` files from each subdirectory in raw data path into `/DATfiles` using:
+1. Set path (in `./gather_DAT.sh`, and  `functions.py`) to the simulation raw data.
+2. Set input parameters in `functions.py` 
+3. Gather `DATxxxxxx` files from each subdirectory in raw data path into `/DATfiles` using:
    ```bash
    ./gather_DAT.sh
-3. Decode Binary DATxxxxxx Files `make` and `./corsikaReader DATfiles/.../DATxxxxxx --thinned`. This step generates decoded particle files in the `/Particles` directory.
+4. Decode Binary DATxxxxxx Files `make` and `./corsikaReader DATfiles/.../DATxxxxxx --thinned`. This step generates decoded particle files in the `/Particles` directory.
 
 
 ## Making Plots
 
 Run the Jupyter notebook: `corsikaPlot.ipynb`
-The notebook supports two different options for retrieving and plotting raw data (see notebook documentation for details).
+
+
+## run radiation energy for multiple events
+
+Run the python script: `RadiationEnergy.py`
+
