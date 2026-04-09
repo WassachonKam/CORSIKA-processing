@@ -1,0 +1,12 @@
+ccsrc = $(wildcard *.cpp) cnpy/cnpy.cpp
+obj   = $(ccsrc:.cpp=.o)
+
+CXXFLAGS = -std=c++11 -O0 -fbounds-check -ggdb -Wall -Icnpy
+LDFLAGS  = -lm -lz   # keep zlib
+
+corsikaReader: $(obj)
+	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDFLAGS)
+
+.PHONY: clean
+clean:
+	rm -f $(obj) corsikaReader

@@ -70,8 +70,6 @@ enum class SimType {Thinned, Standard};
 
 // --------------------------------
 // MAIN
-// --------------------------------
-
 int main(int argc, char *argv[]) {
 
     if (argc < 3) {
@@ -99,27 +97,10 @@ int main(int argc, char *argv[]) {
     vector<string> possible_headers = {"RUNH", "EVTH", "LONG", "EVTE", "RUNE"};
 
     vector<string> particles = {"mupm", "epm"};
-    // vector<string> particles = {"mupm", "epm", "positron", "electron", "posmu", "negmu"};
 
-    // string primary = "proton";
-    // string energy = "lgE_16.0";
-    // string theta = "sin2_0.0";
-
-    #ifndef PRIMARY
-    #define PRIMARY "proton"
-    #endif
-
-    #ifndef ENERGY
-    #define ENERGY "lgE_16.0"
-    #endif
-
-    #ifndef THETA
-    #define THETA "sin2_0.0"
-    #endif
-
-    string primary = PRIMARY;
-    string energy = ENERGY;
-    string theta = THETA;
+    string primary = "proton";
+    string energy = "lgE_18.0";
+    string theta = "sin2_0.2";
 
     cout << "corsikaReader " << primary << " " << energy << " " << theta << endl;
 
@@ -131,10 +112,6 @@ int main(int argc, char *argv[]) {
         int idpa1 = -1, idpa2 = -1;
         if (particle == "mupm") { idpa1 = 5; idpa2 = 6; }
         else if (particle == "epm") { idpa1 = 2; idpa2 = 3; }
-        // else if (particle == "positron") { idpa1 = 2; idpa2 = 2; }
-        // else if (particle == "electron") { idpa1 = 3; idpa2 = 3; }
-        // else if (particle == "posmu") { idpa1 = 5; idpa2 = 5; }
-        // else if (particle == "negmu") { idpa1 = 6; idpa2 = 6; }
 
         ofstream fout_total(out_dir + "/TOTAL_" + particle + ".dat");
         fout_total << "#RunNumber PrimaryID PrimaryEnergy Zenith Azimuth TotalNumber\n";
@@ -188,9 +165,9 @@ int main(int argc, char *argv[]) {
                         for (int i = j*nsblstd + 1; i <= j*nsblstd + nsblstd; i += 8) {
                             int idpa = (int)sdata[i]/1000;
                             if (idpa == idpa1 || idpa == idpa2) {
-                                float px = sdata[i+1], py = sdata[i+2], pz = sdata[i+3]; // momentum component in x, y, z direction (units of GeV)
+                                float px = sdata[i+1], py = sdata[i+2], pz = sdata[i+3];
                                 float x = sdata[i+4], y = sdata[i+5], t = sdata[i+6];
-                                float w = isThin ? sdata[i+7] : 1.0; // weight for thinned file
+                                float w = isThin ? sdata[i+7] : 1.0;
 
                                 nParticles += w;
                                 particle_id_v.push_back(sdata[i]);

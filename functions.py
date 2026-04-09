@@ -4,6 +4,7 @@ import matplotlib.gridspec as gridspec
 from matplotlib.colors import LogNorm
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import pandas as pd
+import os
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from scipy import integrate
 from scipy import signal, fft, constants, optimize
@@ -14,8 +15,8 @@ from scipy import signal, fft, constants, optimize
 #=====================================
 
 primary = "proton"
-energy = "lgE_17.0"
-sin2theta = "0.4"
+energy = "lgE_16.0"
+sin2theta = "0.0"
 runnum = 0
 
 #=====================================
@@ -28,14 +29,16 @@ fp_long = lambda primary, energy, sin2theta, runnum: f'{rawdata}/{primary}/{ener
 fp_list = lambda primary, energy, sin2theta, runnum: f'{rawdata}/{primary}/{energy}/sin2_{sin2theta}/{runnum:06d}/SIM{runnum:06d}.list'
 fp_inp = lambda primary, energy, sin2theta, runnum: f'{rawdata}/{primary}/{energy}/sin2_{sin2theta}/{runnum:06d}/SIM{runnum:06d}.inp'
 fp_radio = lambda primary, energy, sin2theta, runnum, ant: f'{rawdata}/{primary}/{energy}/sin2_{sin2theta}/{runnum:06d}/SIM{runnum:06d}_coreas/raw_ant_{ant}.dat'
-fp_Nmu = lambda primary, energy, sin2theta, runnum: f'Particles/{primary}/{energy}/sin2_{sin2theta}/DAT{runnum:06d}_mupm.dat'
-fp_Ne = lambda primary, energy, sin2theta, runnum: f'Particles/{primary}/{energy}/sin2_{sin2theta}/DAT{runnum:06d}_epm.dat'
+fp_Nmu = lambda primary, energy, sin2theta, runnum: f'Particles/{primary}/{energy}/sin2_{sin2theta}/DAT{runnum:06d}_mupm.npz'
+fp_Ne = lambda primary, energy, sin2theta, runnum: f'Particles/{primary}/{energy}/sin2_{sin2theta}/DAT{runnum:06d}_epm.npz'
+fp_Nelectron = lambda primary, energy, sin2theta, runnum: f'Particles/{primary}/{energy}/sin2_{sin2theta}/DAT{runnum:06d}_electron.npz'
 fp_Nmu_tot = lambda primary, energy, sin2theta: f'Particles/{primary}/{energy}/sin2_{sin2theta}/TOTAL_mupm.dat'
 fp_Ne_tot = lambda primary, energy, sin2theta: f'Particles/{primary}/{energy}/sin2_{sin2theta}/TOTAL_epm.dat'
-fp_RadE = lambda primary, energy, sin2theta: f'radEnergy/{primary}_{energy}_{sin2theta}.dat'
-fp_radE_op = lambda primary, energy, sin2theta: f'radEnergy/{primary}_{energy}_{sin2theta}.dat'
-
-
+fp_RadE = lambda primary, energy, sin2theta: f'radEnergy/raw/{primary}_{energy}_{sin2theta}.npz'
+# fp_RadE_norm1 = lambda primary, energy, sin2theta: f'radEnergy/norm_sintheta/{primary}_{energy}_{sin2theta}.dat'
+fp_RadE_norm2 = lambda primary, energy, sin2theta: f'radEnergy/norm_sintheta2/{primary}_{energy}_{sin2theta}.npz'
+fp_Xmax = lambda primary, energy, sin2theta: f'Xmax/{primary}_{energy}_sin2_{sin2theta}.dat'
+fp_DAT = lambda primary, energy, sin2theta, runnum: f'{rawdata}/{primary}/{energy}/sin2_{sin2theta}/{runnum:06d}/DAT{runnum:06d}'
 #=====================================
 # constants / math functions
 #=====================================
@@ -95,6 +98,14 @@ class GroundtoShowerCoordinates:
     def vxvxB(self):
         dr = np.array([self.x, self.y, 0])
         return np.dot(dr, self.e2)
+    
+    def EtoShower(self, Ex, Ey, Ez): # convert Ex, Ey, Ez to EvxB, Evx(vxB)
+        E = np.array([Ex, Ey, Ez])
+        E_vxB = np.dot(E, self.e1)
+        E_vxvxB = np.dot(E, self.e2)
+        E_v = np.dot(E, self.v)  # optional longitudinal component
+
+        return E_vxB, E_vxvxB, E_v
 
 # Radiation energy
 def RadEnergy(inpfile, Nant, ef, eff, ant_x, ant_y):
@@ -132,7 +143,9 @@ def RadEnergy(inpfile, Nant, ef, eff, ant_x, ant_y):
 
     
     # select data on phi = 90 
-    mask = (np.abs(vxB) < 1e-1) & (vxvxB >= 0) #select x and y position only phi = 90
+    angle = np.arctan2(vxvxB, vxB)
+    mask  = (np.round(angle,2) == np.round(np.pi/2,2)) & (vxvxB >= 0) 
+    # mask = (np.abs(vxB) < 1e-1) & (vxvxB >= 0) #select x and y position only phi = 90
     r = vxvxB[mask]
     f1 = ef[mask]
     f2 = eff[mask]
@@ -158,31 +171,36 @@ def RadEnergy(inpfile, Nant, ef, eff, ant_x, ant_y):
 # text boxes for plots 
 class textboxes:
 
-    def __init__(self, E_sum, E_sum_f):
+    def __init__(self, fig, E_sum, E_sum_f):
         self.E_sum = E_sum
         self.E_sum_f = E_sum_f
+        self.fig = fig
 
     def allbands(self, time0, time1):
-        plt.gcf().text(
-            0.54, 0.55,
-            rf'all frequency bands' + '\n' 
+        self.fig.text(
+            0.95, 0.80,
+            rf'full frequency band' + '\n' 
             + rf'bin width = {time1-time0:.2e}' + '\n'
             + rf'$\Sigma |\mathrm{{E_t}}|^2$ = {self.E_sum:.2e} '
               r'$\mathrm{V^2\,m^{-2}}$' + '\n'
             + f'energy fluence = {energyfluence(self.E_sum):.2e} '
               r'$\mathrm{eV\,m^{-2}}$',
+            ha='left',
+            va='top',
             bbox=dict(boxstyle='round', facecolor='white', alpha=0.8),
             fontsize=11
         )
 
     def filtered(self):
-        plt.gcf().text(
-            0.54, 0.38,
+        self.fig.text(
+            0.95, 0.60,
             rf'70-350 MHz' + '\n' 
             + rf'$\Sigma |\mathrm{{E_t}}|^2$ = {self.E_sum_f:.2e} '
               r'$\mathrm{V^2\,m^{-2}}$' + '\n'
             + f'energy fluence = {energyfluence(self.E_sum_f):.2e} '
               r'$\mathrm{eV\,m^{-2}}$',
+            ha='left',
+            va='top',
             bbox=dict(boxstyle='round', facecolor='white', alpha=0.8),
             fontsize=11
         )
@@ -203,8 +221,8 @@ def pltNpar(parx, pary, parw, ptype): # number of particles on x, and y axes wit
     # ax1.set_aspect('equal')
     ax1.set_xlabel('x (m)')
     ax1.set_ylabel('y (m)')
-    # ax1.set_xlim(-1000, 1000)
-    # ax1.set_ylim(-1000, 1000)
+    ax1.set_xlim(-1000, 1000)
+    ax1.set_ylim(-1000, 1000)
     
     ax2 = fig.add_subplot(gs[0, 0], sharex=ax1)
     counts_par, bins_par, _ = ax2.hist(parx, bins=25,  weights = parw, histtype = hist, label = rf'${ptype}^{{\pm}}$')
@@ -240,7 +258,7 @@ def pltNpar(parx, pary, parw, ptype): # number of particles on x, and y axes wit
     
     
 # plot radius vs energy fluence
-def pltef(vxB, vxvxB, ef, eff, method):
+def pltef(vxB, vxvxB, ef, eff, method, xmin,xmax, scale, primary, energy, sin2theta):
     vxB = np.asarray(vxB)
     vxvxB = np.asarray(vxvxB)
     ef = np.asarray(ef)
@@ -248,8 +266,9 @@ def pltef(vxB, vxvxB, ef, eff, method):
 
     
     # select data on phi = 90 
-    mask = (np.abs(vxB) < 1e-1) & (vxvxB >= 0) 
-    # mask = (np.round(vxB, 3) == 0) & (vxvxB >= 0) #select x and y position only phi = 90
+    theta = np.arctan2(vxvxB, vxB)
+    mask  = (np.round(theta,2) == np.round(np.pi/2,2)) & (vxvxB >= 0) 
+
     r = vxvxB[mask]
     f1 = ef[mask]
     f2 = eff[mask]
@@ -266,24 +285,69 @@ def pltef(vxB, vxvxB, ef, eff, method):
     rad_E1 = 2*np.pi*int_rf1
     rad_E2 = 2*np.pi*int_rf2
 
-    plt.scatter(r,f1, label = 'all frequency bands', color = 'blue')
-    plt.scatter(r,f2, label = '70-350 Mz', color = 'red')
+    ############# select data on phi = 90 and 270
+    mask2  = (np.round(theta,2) == np.round(np.pi/2,2)) | (np.round(theta,2) == np.round(-np.pi/2,2))
+    rr = vxvxB[mask2]
+    ff1 = ef[mask2]
+    ff2 = eff[mask2]
+    
+    # r*f
+    rrf1 = rr * ff1
+    rrf2 = rr * ff2
+    
+    # trapezoidal integration
+    int_rrf1 = integrate.trapezoid(rrf1,rr)
+    int_rrf2 = integrate.trapezoid(rrf2,rr)
+    
+    # radiation energy calculation
+    rrad_E1 = np.pi*int_rrf1
+    rrad_E2 = np.pi*int_rrf2
+
+    fig = plt.figure()
+    plt.rcParams["font.size"] = 12
+    plt.scatter(r,f2, label = '70-350 Mz ($\phi = 90$)', color = 'red')
+    plt.scatter(r,f1, label = r'full frequency band ($\phi = 90$)', color = 'blue')
     plt.xlabel("distance to shower axis (m)")
     plt.ylabel(rf"energy fluence  ($\mathrm{{eV}} \cdot \mathrm{{m}}^{{-2}}$)")
     if method == 'bp':
-        plt.title(rf"Bandpass Filter")
+        plt.title(rf"Bandpass Filter $\phi = 90$ ({primary}, {energy}, sin2_{sin2theta})")
     if method == 'fft':
-        plt.title(rf"FFT")
-    plt.legend()
-    plt.text(
-        0.45, 0.75,
-        rf'$E_{{\rm rad_{{all \ bands}} }}= {rad_E1:.2e}$ eV' + '\n'
-        rf'$E_{{\rm rad_{{70-350 MHz}} }} = {rad_E2:.2e}$ eV',
+        plt.title(rf"FFT $\phi = 90$ ({primary}, {energy}, sin2_{sin2theta})")
+    plt.legend(bbox_to_anchor=(1.04, 1), loc="upper left")
+    fig.text(
+        1.05, 0.75,
+        rf'$E_{{\rm rad, full \ bands }}= {rad_E1:.2e}$ eV' + '\n'
+        rf'$E_{{\rm rad, 70-350 MHz }} = {rad_E2:.2e}$ eV',
         transform=plt.gca().transAxes,
         va='top'
     )
+    plt.xscale(scale)
+    # plt.xlim(xmin,xmax)
     plt.show()
-    return len(f1), len(f2)
+
+    fig = plt.figure()
+    plt.rcParams["font.size"] = 12
+    plt.scatter(rr,ff1,label = 'full frequency band ($\phi = 90, 270$)', color = 'blue')
+    plt.scatter(rr,ff2,label = '70-350 Mz ($\phi = 90, 270$)', color = 'red')
+    plt.xlabel("distance to shower axis (m)")
+    plt.ylabel(rf"energy fluence  ($\mathrm{{eV}} \cdot \mathrm{{m}}^{{-2}}$)")
+    if method == 'bp':
+        plt.title(rf"Bandpass Filter $\phi = 90,270$  ({primary}, {energy}, sin2_{sin2theta})")
+    if method == 'fft':
+        plt.title(rf"FFT $\phi = 90,270$  ({primary}, {energy}, sin2_{sin2theta})")
+    plt.legend(bbox_to_anchor=(1.04, 1), loc="upper left")
+    fig.text(
+        1.05, 0.75,
+        rf'$E_{{\rm rad, full \ bands }} = {rrad_E1:.2e}$ eV' + '\n'
+        rf'$E_{{\rm rad, 70-350 MHz }} = {rrad_E2:.2e}$ eV',
+        transform=plt.gca().transAxes,
+        va='top'
+    )
+    plt.xscale(scale)
+    # plt.xlim(xmin,xmax)
+    plt.show()
+
+    return len(ff1), len(ff2)
 
 
 # plot energy fluence color map
@@ -324,10 +388,13 @@ def pltefmap(finp, Nant, vxB, vxvxB, ant_x, ant_y, colors):
     
     # plot
     plot = axes[1].scatter(vxB, vxvxB, c=colors, s = 25, cmap = 'jet')
-    axes[1].set_xlabel(rf"$\hat{{v}}\times\hat{{B}} \ direction (m)$")
-    axes[1].set_ylabel(rf"$\hat{{v}} \times (\hat{{v}}\times\hat{{B}}) \ direction \ (m)$")
+    axes[1].set_xlabel(rf"$\hat{{v}}\times\hat{{B}} \ \mathrm{{direction \ (m)}}$")
+    axes[1].set_ylabel(rf"$\hat{{v}} \times (\hat{{v}}\times\hat{{B}}) \ \mathrm{{direction \ (m)}}$")
     axes[1].set_title("Shower Coordinates")
+    # axes[1].set_xlim(-0.05,0.05)
+    # axes[1].set_ylim(-0.05,0.05)
     
+
     cbar_ax = inset_axes(axes[1],
                          width="5%", # width = 5% of parent axes width
                          height="100%", # height = 100% of parent axes height
@@ -336,38 +403,62 @@ def pltefmap(finp, Nant, vxB, vxvxB, ant_x, ant_y, colors):
                         )
     cbar = fig.colorbar(plot, cax=cbar_ax)
     cbar.set_label(rf'energy fluence $(\mathrm{{eV}} \cdot \mathrm{{m}}^{{-2}})$', rotation=-90, labelpad=30)
+    # plt.suptitle(rf'{primary}, {energy}, sin2_{sin2theta}, run {runnum}')
     plt.show()
 
 
 # plot |E|^2 histogram
-def pltEmag2(timer, timef, Emag2, Emag2_f, E_sum, E_sum_f, style):
+def pltEmag2(ant_no, timer, timef, Emag2, Emag2_f, E_sum, E_sum_f, style):
 
-    plt.figure(figsize=(8,5))
     
-    if style == 'plot':
-        plt.plot(timer, Emag2, label='all frequency bands', color = 'blue')
+    fig = plt.figure(figsize=(8,5))
+    plt.title(f'ant {ant_no}')
+    
+    if style == 'bp':
+        plt.plot(timer, Emag2, label='full frequency band', color = 'blue')
         plt.plot(timef, Emag2_f, label='70–350 MHz', color = 'red')
-    elif style == 'scatter':
-        plt.scatter(timer, Emag2, label='all frequency bands', color = 'blue', s = 5)
+        plt.xlim(0,50)
+        plt.xlabel("time (ns)")
+    elif style == 'fft':
+        plt.scatter(timer, Emag2, label='full frequency band', color = 'blue', s = 5)
         plt.scatter(timef, Emag2_f, label='70–350 MHz', color = 'red', s = 5)
+        plt.xlabel("Frequency (Hz)")
     
-    plt.xlabel("Time (s)")
+    
     plt.ylabel(r"$|\mathrm{E_t}|^2\ (\mathrm{V^2\,m^{-2}})$")
+    plt.title(rf'{primary}, {energy}, sin2_{sin2theta}, run {runnum}')
     plt.legend()
 
-    tb = textboxes(E_sum, E_sum_f)
+    tb = textboxes(fig, E_sum, E_sum_f)
     tb.allbands(timer[0], timer[1])
     tb.filtered()
 
     plt.show()
+
+# plt E
+def pltE(ant_no, time, Ex,Ey, Ez):
+        plt.figure(figsize=(8,5))
+        plt.title(f'ant {ant_no}')
+        plt.plot(time,Ex, label = rf'$E_x$')
+        plt.plot(time,Ey, label = rf'$E_y$')
+        plt.plot(time,Ez, label = rf'$E_z$')
+        plt.xlim(0,50)
+        plt.xlabel("time (ns)")
+        plt.ylabel("E (V/m)")
+        plt.title(rf'{primary}, {energy}, sin2_{sin2theta}, run {runnum}')
+        plt.legend()
     
 # plot longitudinal profile
-def pltlp(atmdepth, positron, electron, muplus, muminus, tot_e, tot_mu):
+def pltlp(atmdepth, positron, electron, muplus, muminus, tot_e, tot_mu, Xmax, Ne_Xmax, RadE, runnum, Xv):
     color_mu =  'steelblue'
     color_e = 'firebrick'
     
     fig, axes = plt.subplots(1, 3, sharey=True)
     fig.subplots_adjust(wspace=0.1)  
+
+    Xmax = Xmax
+    Ne_Xmax = Ne_Xmax
+
     
     axes[0].plot(positron, atmdepth , label = r'$e^+$', color = color_e, ls ='--')
     axes[0].plot(electron, atmdepth,  label = r'$e^-$', color = color_e, ls =':')
@@ -378,13 +469,39 @@ def pltlp(atmdepth, positron, electron, muplus, muminus, tot_e, tot_mu):
     axes[1].plot(muminus, atmdepth, label = r'$\mu^-$',  color = color_mu, ls = ':')
     axes[1].legend()
     axes[1].set_xlabel("particle number")
-    axes[1].set_title(f'{primary}, {energy}, sin2theta = {sin2theta}')
+    # axes[1].set_title(f'{primary}, {energy}, sin2theta = {sin2theta}, run {runnum}')
     
     axes[2].plot(tot_mu, atmdepth, label = r'$\mu^{\pm} (\times 50)$', color = color_mu)
     axes[2].plot(tot_e, atmdepth, label = r'$e^{\pm}$', color = color_e)
+    axes[2].hlines(Xmax, min(tot_e), max(tot_e), color = 'black')
+    axes[2].hlines(Xv, min(tot_e), max(tot_e), color='black', linestyle='--') 
+    axes[2].text(0, Xmax, 'Xmax', ha='left', va='bottom')
+    axes[2].text(0, Xv, 'ground', ha='left', va='bottom')
     axes[2].legend()
 
     plt.gca().invert_yaxis()
+
+    # Text box
+    fig.text(
+        0.95, 0.8, 
+        rf'primary: {primary}' + '\n' +
+        rf'energy: {energy}' + '\n' +
+        rf'$sin^2 \theta = {sin2theta}$' + '\n' +
+        rf'run {runnum}' + '\n' +        
+        rf'$N_{{e,Xmax}}$ = {Ne_Xmax:.2e} ' + '\n' +
+        rf'radiation energy = {RadE:.2e} eV/$sin^2 \alpha$',
+        ha='left',
+        va='top',
+        #bbox=dict(boxstyle='round', facecolor='white', alpha=0.8)
+    )
+
+    
+   
+
+    save_dir = rf'figure/LongitudinalProfile/{primary}_{energy}_{sin2theta}'
+    os.makedirs(save_dir, exist_ok=True)
+    # plt.savefig(f'{save_dir}/{runnum}.jpg', bbox_inches="tight", dpi = 300)
+
     plt.show()
 
 # plot correlation of Nmu and Ne
@@ -422,3 +539,398 @@ def pltmuecorr(energydir, sin2theta, energylabel):
     
     plt.xlabel("number of electrons")
     plt.ylabel("number of muon")
+
+
+# plot correlation between Ne_Xmax and RadE. RadE normalized by sin2theta, norm = True 
+def pltRadE_NeXmax(sin2thetas, primary, energy, labels, norm, filtering): 
+    colors = plt.cm.viridis(np.linspace(0, 1, len(sin2thetas)))
+    for p in primary:
+        for i in range (len(energy)):
+            e = energy[i]
+            for sin2theta, c in zip(sin2thetas, colors):
+                    
+                    fNe_tot = fp_Xmax(p, e, sin2theta)
+
+                    if norm == True:
+                        fRadE = fp_RadE_norm2(p, e, sin2theta)
+                        plt.ylabel(rf'radiation energy (eV) / $sin^2 \alpha$')
+                    if norm == False:
+                        fRadE = fp_RadE(p, e, sin2theta)
+                        plt.ylabel(f'radiation energy (eV)')
+                    fileNe = np.loadtxt(fNe_tot)
+                    Ne = fileNe[:,3]
+                    fileRadE = np.load(fRadE)
+  
+                    if filtering == True: RadE = fileRadE['radE_filtered(eV)']
+                    if filtering == False: RadE = fileRadE['radE(eV)']
+                    
+                    
+                    plt.scatter(Ne, RadE, s = 7, color = c, label = rf"$sin^2\theta$ = {sin2theta}")
+            
+                    if sin2theta == "0.7":
+                        if norm == False: 
+                            txty = max(RadE) * 1.5
+                            txtx = np.mean(Ne)
+                        if norm == True: 
+                            txty = max(RadE) * 3
+                            txtx = np.mean(Ne) 
+                        plt.text(
+                            txtx, txty,                   
+                            fr'{labels[i]}',
+                            fontsize=14,
+                            ha='center',
+                            va='center',
+                            color = 'red'
+                            )
+                    if e == "lgE_16.0":
+                        plt.legend(bbox_to_anchor=(1.04, 1), loc="upper left")
+            
+                            
+                
+                    plt.xlabel(rf'$N_e$ at $X_{{max}}$')
+                    
+                    plt.xscale('log')
+                    plt.yscale('log')
+                    # plt.ylim(2e4,2e12)
+                    plt.title(rf'primary particle: {p}, filtering = {filtering}')
+        plt.show()
+
+# plot correlation between Ne ratio vs Xmax, style = 'horiz' or style = 'verti'
+def pltNeRatio(energy, style):
+    
+    sin2thetas = ["0.0", "0.1", "0.2", "0.3", "0.4", "0.5", "0.6", "0.7",  "0.8", "0.9"]
+    primary = ["proton", "iron"]
+    X0 = 697.6 #g/cm^2
+
+    if style == 'verti': fig, axs = plt.subplots(nrows=5, ncols=2, figsize=(8, 16), sharex = True, sharey = True)
+    elif style == 'horiz': fig, axs = plt.subplots(nrows=2, ncols=5, figsize=(16, 8), sharex = True, sharey = True)
+    fig.suptitle(f'{energy[0]}', fontsize=16)
+    plt.tight_layout(rect=[0, 0, 1, 0.97])
+
+    for i in range(len(sin2thetas)):
+        sin2theta = sin2thetas[i]
+
+        #determine row and column for plotting
+        if style == 'verti':
+            if i % 2 == 0:
+                r = int(i/2)
+                c = 0
+            else:
+                r = int((i-1)/2)
+                c = 1
+        elif style == 'horiz':
+            if i <= 4:
+                r = 0
+                c = int(i)
+            else:
+                r = 1
+                c = int(i-5)
+
+        for j in range(len(energy)):
+            e = energy[j]
+            for k in range(len(primary)):
+                p = primary[k]
+                fileXmax = np.loadtxt(fp_Xmax(p, e, sin2theta))
+                fileNeground = np.loadtxt(fp_Ne_tot(p, e, sin2theta))
+                Ne_Xmax = fileXmax[:,5]
+                Xmax = fileXmax[:,1]
+                Ne_ground = fileNeground[:,5]
+                
+                ratio = Ne_ground/Ne_Xmax
+
+                thetafloat = float(sin2theta)
+                costheta = np.cos(np.arcsin(np.sqrt(thetafloat)))
+
+                Xv = X0/ costheta
+
+                if p == "proton": 
+                    color = 'red'
+                if p == "iron": color = 'blue'
+
+                ax = axs[r, c]
+                ax.scatter(Xmax,ratio, c = color, s = 5, label = f"{p}")
+                ax.set_title(rf"$sin^2 \theta = ${sin2theta}")
+                ax.axvline(x=Xv, color='black', linestyle='--') 
+                
+                if Xv < 1000: ax.text(Xv +8 , 0.5, 'ground', ha='left', va='bottom')
+                if e == "lgE_17.0": plt.legend()
+
+                if style == 'verti':
+                    if c == 0: ax.set_ylabel(rf"$N_{{e_{{ground}}}}/N_{{e_{{Xmax}}}}$")
+                    if r == 4: ax.set_xlabel(rf"$X_{{max}}$ (g/cm$^2$)")
+
+                if style == 'horiz': 
+                    if c == 0: ax.set_ylabel(rf"$N_{{e_{{ground}}}}/N_{{e_{{Xmax}}}}$")
+                    if r == 1: ax.set_xlabel(rf"$X_{{max}}$ (g/cm$^2$)")
+                
+                ax.set_xlim(500,1100)
+                ax.set_ylim(- 0.1,1.2)
+
+    plt.subplots_adjust(wspace=0.1)
+    plt.legend()
+    plt.show()
+
+
+# plot correlation between Ne vs Xmax vs radiation energy with all zenith angle 
+# filtering = True, 70-350 MHz
+# filtering = False, full band
+# style = 'horiz' or style = 'verti'
+
+def pltNeXmaxRadEAllzenith( primary, energy, filtering, style, corr):
+    sin2thetas = ["0.0", "0.1", "0.2", "0.3", "0.4", "0.5", "0.6", "0.7",  "0.8", "0.9"]
+    X0 = 697.6 #g/cm^2
+
+    if style == 'verti': 
+        fig, axs = plt.subplots(nrows=5, ncols=2, figsize=(10, 16), sharex = True, sharey = True)
+        fig.subplots_adjust(wspace=0.15, hspace = 0.15, top = 0.95)
+    elif style == 'horiz': 
+        fig, axs = plt.subplots(nrows=2, ncols=5, figsize=(20, 12), sharex = False, sharey = True)
+        # fig, axs = plt.subplots(nrows=2, ncols=5, figsize=(20, 12), sharex = False, sharey = False)
+        fig.subplots_adjust(wspace=0.05, hspace = 0.1, top = 0.93)
+
+
+    fig.suptitle(f'{primary[0]}, {energy[0]}, filtering = {filtering}', fontsize=16)
+
+    for i in range(len(sin2thetas)):
+        sin2theta = sin2thetas[i]
+
+        #determine row and column for plotting
+        if style == 'verti':
+            if i % 2 == 0:
+                r = int(i/2)
+                c = 0
+            else:
+                r = int((i-1)/2)
+                c = 1
+        elif style == 'horiz':
+            if i <= 4:
+                r = 0
+                c = int(i)
+            else:
+                r = 1
+                c = int(i-5)
+
+        for j in range(len(energy)):
+            e = energy[j]
+            for k in range(len(primary)):
+                p = primary[k]
+                
+                fXmax = fp_Xmax(p, e, sin2theta)
+                fRadE = fp_RadE_norm2(p, e, sin2theta)
+                fRadE_unnorm = fp_RadE(p, e, sin2theta)
+
+                fileXmax = np.loadtxt(fXmax)
+                Ne = fileXmax[:,5] # Ne at Xmax
+                Xmax = fileXmax[:,6]
+                runnum = fileXmax[:,0]
+                fileRadE = np.load(fRadE, allow_pickle=True)
+                fileRadE_unnorm = np.load(fRadE_unnorm, allow_pickle=True)
+
+        
+                if filtering == True: 
+                    RadE = fileRadE['radE_filtered(eV)']
+                    RadE_unnorm = fileRadE_unnorm['radE_filtered(eV)']
+                    RadE_vxB = fileRadE_unnorm['radE_filtered_vxB(eV)']
+                    RadE_vxvxB = fileRadE_unnorm['radE_filtered_vxvxB(eV)']
+                    RadE_vxB_norm = fileRadE['radE_filtered_vxB(eV)']
+                    
+                if filtering == False: 
+                    RadE = fileRadE['radE(eV)']
+                    RadE_unnorm = fileRadE_unnorm['radE(eV)']
+                    RadE_vxB = fileRadE_unnorm['radE_vxB(eV)']
+                    RadE_vxvxB = fileRadE_unnorm['radE_vxvxB(eV)']
+                    RadE_vxB_norm = fileRadE['radE_vxB(eV)']
+                
+
+                # angle value
+                alpha = fileRadE['alpha']
+                sin2alpha = np.sin(alpha)**2
+                thetafloat = float(sin2theta)
+                theta = np.arcsin(np.sqrt(thetafloat))
+                costheta = np.cos(theta)
+
+                Xv = X0/ costheta
+
+                # Exclude data if Xmax is negative value 
+                mask = Xmax >= 0
+                Xmax = Xmax[mask]
+                Ne = Ne[mask]
+                runnum = runnum[mask]
+                sin2alpha = sin2alpha[mask]
+
+                RadE = RadE[mask]
+                RadE_unnorm = RadE_unnorm[mask]
+                RadE_vxB = RadE_vxB[mask]
+                RadE_vxvxB = RadE_vxvxB[mask]
+                RadE_vxB_norm = RadE_vxB_norm[mask]
+
+                ax = axs[r, c]
+
+                if corr == 'NeErad_norm':
+                    sc = ax.scatter(Ne, RadE, s=7, c=Xmax, cmap="viridis", vmin = None, vmax = None)
+                    # sc = ax.scatter(Ne, RadE, s=7, c=Xmax, cmap="viridis", vmin = 400, vmax = 650) # 400, 600 for iron, 400, 1100 for proton
+                    ax.set_yscale('log')
+                    # ax.set_xlim(0.3e7,1e7)
+                    if style == 'verti':
+                        if c == 0: ax.set_ylabel(r" $\mathrm{{E_{{rad}}}}$ (eV) / $\sin^2\alpha$")
+                        if r == 4: ax.set_xlabel(rf"$N_{{e,Xmax}}$")
+                        plt.colorbar(sc, label=rf"$X_{{max}}$ (g/cm$^2$)")
+
+                    elif style == 'horiz': 
+                        if c == 0: ax.set_ylabel(r"$\mathrm{{E_{{rad}}}}$ (eV)/ $\sin^2\alpha$")
+                        ax.set_xlabel(rf"$N_{{e,Xmax}}$")
+                        plt.colorbar(sc, label=rf"$X_{{max}}$ (g/cm$^2$)", orientation='horizontal')
+                
+                elif corr == 'NeErad':
+                    sc = ax.scatter(Ne, RadE_unnorm, s=7, c=Xmax, cmap="viridis", vmin = None, vmax = None)
+                    # sc = ax.scatter(Ne, RadE_unnorm, s=7, c=Xmax, cmap="viridis", vmin = 400, vmax = 650)
+                    ax.set_yscale('log')
+                    # ax.set_xlim(0.3e7,1e7)
+                    if style == 'verti':
+                        if c == 0: ax.set_ylabel(r"$\mathrm{{E_{{rad}}}}$ (eV)")
+                        if r == 4: ax.set_xlabel(rf"$N_{{e,Xmax}}$")
+                        plt.colorbar(sc, label=rf"$X_{{max}}$ (g/cm$^2$)")
+
+                    elif style == 'horiz': 
+                        if c == 0: ax.set_ylabel(r"$\mathrm{{E_{{rad}}}}$ (eV)")
+                        ax.set_xlabel(rf"$N_{{e,Xmax}}$")
+                        plt.colorbar(sc, label=rf"$X_{{max}}$ (g/cm$^2$)", orientation='horizontal')
+                    
+                elif corr == 'NeXmax':
+                    norm = LogNorm(vmin=RadE.min(), vmax=RadE.max())
+                    # norm = LogNorm(vmin=10,vmax = 1e7)
+                    sc = ax.scatter(Ne, Xmax, s=7, c=RadE, cmap="viridis", norm=norm)
+                    ax.axhline(y=Xv, color='black', linestyle='--') 
+                    # ax.set_xlim(0.3e7,1e7)
+                    ax.set_ylim(400,1100)
+                    if Xv < 1000: ax.text(np.mean(Ne) , Xv +8, 'ground', ha='left', va='bottom')
+
+                    if style == 'verti':
+                        if c == 0: ax.set_ylabel(rf"$X_{{max}}$ (g/cm$^2$)")
+                        if r == 4: ax.set_xlabel(rf"$N_{{e,Xmax}}$")
+                        plt.colorbar(sc, label=r"$\mathrm{{E_{{rad}}}}$ (eV)/ $\sin^2\alpha$")
+
+                    elif style == 'horiz': 
+                        if c == 0: ax.set_ylabel(rf"$X_{{max}}$ (g/cm$^2$)")
+                        # if r == 1: ax.set_xlabel(rf"$N_{{e,Xmax}}$")
+                        ax.set_xlabel(rf"$N_{{e,Xmax}}$")
+                        plt.colorbar(sc, label=r"$\mathrm{{E_{{rad}}}}$ (eV)/ $\sin^2\alpha$", orientation='horizontal')
+
+                elif corr == 'EradSina':
+                    sc = ax.scatter(sin2alpha, RadE_unnorm, s=7, c=Ne, cmap="viridis")
+                    ax.set_yscale('log')
+
+                    if style == 'verti':
+                        if c == 0: ax.set_ylabel(r"$\mathrm{{E_{{rad}}}}$ (eV)")
+                        if r == 4: ax.set_xlabel(rf'$sin^2 \alpha$')
+                        plt.colorbar(sc, label=rf"$N_{{e,Xmax}}$")
+
+                    elif style == 'horiz': 
+                        if c == 0: ax.set_ylabel(r"$\mathrm{{E_{{rad}}}}$ (eV)")
+                        ax.set_xlabel(rf'$sin^2 \alpha$')
+                        plt.colorbar(sc, label=rf"$N_{{e,Xmax}}$", orientation='horizontal')
+
+                elif corr == 'EvxBsina':
+                    sc = ax.scatter(sin2alpha, RadE_vxB, s=7, c=Ne, cmap="viridis")
+                    ax.set_yscale('log')
+
+                    if style == 'verti':
+                        if c == 0: ax.set_ylabel(r"$\mathrm{{E_{{rad,vxB}}}}$ (eV)")
+                        if r == 4: ax.set_xlabel(rf'$sin^2 \alpha$')
+                        plt.colorbar(sc, label=rf"$N_{{e,Xmax}}$")
+
+                    elif style == 'horiz': 
+                        if c == 0: ax.set_ylabel(r"$\mathrm{{E_{{rad,vxB}}}}$ (eV)")
+                        ax.set_xlabel(rf'$sin^2 \alpha$')
+                        plt.colorbar(sc, label=rf"$N_{{e,Xmax}}$", orientation='horizontal')
+
+                elif corr == 'EvxvxBNe':
+                    sc = ax.scatter(Ne, RadE_vxvxB, s=7, c=sin2alpha, cmap="viridis")
+                    ax.set_yscale('log')
+
+                    if style == 'verti':
+                        if c == 0: ax.set_ylabel(r"$\mathrm{{E_{{rad,vxvxB}}}}$ (eV)")
+                        if r == 4: ax.set_xlabel(rf'$N_{{e,Xmax}}$')
+                        plt.colorbar(sc, label=rf"$sin^2 \alpha$")
+
+                    elif style == 'horiz': 
+                        if c == 0: ax.set_ylabel(r"$\mathrm{{E_{{rad,vxvxB}}}}$ (eV)")
+                        ax.set_xlabel(rf'$N_{{e,Xmax}}$')
+                        plt.colorbar(sc, label=rf"$sin^2 \alpha$", orientation='horizontal')
+
+                    # ax.set_xlim(0.3e7,1e7)
+                
+                elif corr == 'EvxvxBsina':
+                    sc = ax.scatter(sin2alpha, RadE_vxvxB, s=7, c=Ne, cmap="viridis")
+                    ax.set_yscale('log')
+
+                    if style == 'verti':
+                        if c == 0: ax.set_ylabel(r"$\mathrm{{E_{{rad,vxvxB}}}}$ (eV)")
+                        if r == 4: ax.set_xlabel(rf'$sin^2 \alpha$')
+                        plt.colorbar(sc, label=rf"$N_{{e,Xmax}}$")
+
+                    elif style == 'horiz': 
+                        if c == 0: ax.set_ylabel(r"$\mathrm{{E_{{rad,vxvxB}}}}$ (eV)")
+                        ax.set_xlabel(rf'$sin^2 \alpha$')
+                        plt.colorbar(sc, label=rf"$N_{{e,Xmax}}$", orientation='horizontal')
+
+                elif corr == 'EvxBsina_norm':
+                    # print(RadE_vxB_norm)
+                    sc = ax.scatter(sin2alpha, RadE_vxB_norm, s=7, c=Ne, cmap="viridis")
+                    ax.set_yscale('log')
+
+                    if style == 'verti':
+                        if c == 0: ax.set_ylabel(r"$\mathrm{{E_{{rad,vxB}}}}/ sin^2 \alpha$ (eV)")
+                        if r == 4: ax.set_xlabel(rf'$sin^2 \alpha$')
+                        plt.colorbar(sc, label=rf"$N_{{e,Xmax}}$")
+
+                    elif style == 'horiz': 
+                        if c == 0: ax.set_ylabel(r"$\mathrm{{E_{{rad,vxB}}}}/ sin^2 \alpha$ (eV)")
+                        ax.set_xlabel(rf'$sin^2 \alpha$')
+                        plt.colorbar(sc, label=rf"$N_{{e,Xmax}}$", orientation='horizontal')
+
+                ax.set_title(rf"$sin^2 \theta = ${sin2theta} ({np.rad2deg(theta):.2f}$^\circ$)")
+                
+    plt.show()
+    
+# plot correlation between Ne_ground and RadE. RadE normalized by sin2theta, norm = True 
+def pltRadE_NeGround(sin2thetas, primary, energy, labels, norm, filtering):
+    colors = plt.cm.viridis(np.linspace(0, 1, len(sin2thetas)))
+    for p in primary:
+        for i in range (len(energy)):
+            e = energy[i]
+            for sin2theta, c in zip(sin2thetas, colors):
+
+                fNe_tot = fp_Ne_tot(p, e, sin2theta)
+                fRadE = fp_RadE(p, e, sin2theta)
+                if norm == True:
+                    fRadE = fp_RadE_norm2(p, e, sin2theta)
+                    plt.ylabel(rf'radiation energy (eV) / $sin^2 \alpha$')
+                if norm == False:
+                    fRadE = fp_RadE(p, e, sin2theta)
+                    plt.ylabel(f'radiation energy (eV)')
+                fileNe = np.loadtxt(fNe_tot)
+                Ne = fileNe[:,5]
+                fileRadE = np.load(fRadE)
+                if filtering == True: RadE = fileRadE['radE_filtered(eV)']
+                if filtering == False: RadE = fileRadE['radE(eV)']
+
+                plt.scatter(Ne, RadE, s = 7, color = c, label = rf"$sin^2\theta$ = {sin2theta}")
+                
+                if sin2theta == "0.7":
+                    plt.text(
+                        np.mean(Ne), max(RadE) * 1.2,                   
+                        fr'{labels[i]}',
+                        fontsize=14,
+                        ha='center',
+                        va='center',
+                        )
+                if e == "lgE_16.0":
+                    plt.legend(bbox_to_anchor=(1.04, 1), loc="upper left")
+
+        
+        plt.xlabel(rf'$N_e$ at ground level')
+        plt.xscale('log')
+        plt.yscale('log')
+        plt.title(rf'primary particle: {p}, filtering = {filtering}')
+        plt.show()

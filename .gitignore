@@ -1,12 +1,16 @@
-# Ignore large data folders
-DATfiles/
-Particles/
+DAT*
+*.dat
+*.log
+*.out
+*.err
+figure/
+logs/
 radEnergy/
-
-# Ignore Python cache and checkpoints
-__pycache__/
-.ipynb_checkpoints/
-
-# Ignore compiled files
+*.png
+*.npz
+Xmax/
+Xmax_old/
+ZenithAngle/
 *.o
 corsikaReader
+000000/

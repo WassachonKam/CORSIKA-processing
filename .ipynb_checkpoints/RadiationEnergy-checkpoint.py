@@ -1,7 +1,8 @@
 from scipy import signal, fft, constants, optimize
 from functions import *
 
-output_path = fp_radE_op(primary, energy, sin2theta)
+
+output_path = fp_RadE(primary, energy, sin2theta)
 
 
 # antenna positions
@@ -10,10 +11,18 @@ ant_y =  lambda ypos: ypos.astype(float)/1e2 # y position in m
 
 runmin, runmax = 0, 199
 
-open(output_path, "w").close() #clean file
-with open(output_path, 'a') as file:
-    file.write('#run radE(eV) radE_filtered(eV)' + '\n') #header
+# create dictionaries to store all data
+all_data = {
+    "run": [],
+    "radE(eV)": [],
+    "radE_filtered(eV)": [],
+    "antx": [],
+    "anty": [],
+    "ef": [],
+    "eff": []
+}
 
+print(f"processing radiation energy {primary} {energy} {sin2theta} ")
 for run in range(runmin, runmax+1):
 
     Nant = 160 #number of total antennas
@@ -21,8 +30,10 @@ for run in range(runmin, runmax+1):
     ef, eff,  = (np.zeros(Nant) for _ in range(2))
     # 160 antenna (Nant = 160) loop
     for i, ant_no in enumerate(range (1,Nant+1)):
-        
-        radio_dat = np.loadtxt(fp_radio(primary, energy, sin2theta, run, ant_no))
+
+        try: radio_dat = np.loadtxt(fp_radio(primary, energy, sin2theta, run, ant_no))
+        except FileNotFoundError: continue
+            
     
         # extract data
         time = radio_dat[:,0]
@@ -39,18 +50,34 @@ for run in range(runmin, runmax+1):
         ef[i], eff[i] = energyfluence(E_sum), energyfluence(E_sum_f)
     
     # x-y antenna position
-    flist = fp_list(primary, energy, sin2theta, run)
-    xypos = pd.read_csv(flist, sep=r"\s+",header=None)
+    try:
+        flist = fp_list(primary, energy, sin2theta, run)
+        xypos = pd.read_csv(flist, sep=r"\s+", header=None)
+    except FileNotFoundError:
+        continue   # skip this run entirely
+    
     antx = ant_x(xypos[2])
     anty = ant_y(xypos[3])
 
-    finp = fp_inp(primary, energy, sin2theta, run)
+    try:
+        finp = fp_inp(primary, energy, sin2theta, run)
+    except FileNotFoundError:
+        continue
     
-    # append output on file
-    with open(output_path, 'a') as file:
-        file.write( f'{run}' + ' '
-                   + f'{RadEnergy(finp, Nant, ef, eff, antx, anty)[0]}' 
-                   + ' '
-                   + f'{RadEnergy(finp, Nant, ef, eff, antx, anty)[1]}' 
-                   + '\n')
-    print(run, len(RadEnergy(finp, Nant, ef, eff, antx, anty)[2]), len(RadEnergy(finp, Nant, ef, eff, antx, anty)[3]))
+    radE_vals = RadEnergy(finp, Nant, ef, eff, antx, anty)
+    
+    # store data in dictionary
+    all_data["run"].append(run)
+    all_data["radE(eV)"].append(radE_vals[0])
+    all_data["radE_filtered(eV)"].append(radE_vals[1])
+    all_data["ef"].append(ef)
+    all_data["eff"].append(eff)
+    all_data["antx"].append(antx)
+    all_data["anty"].append(anty)
+
+    # print(run, len(radE_vals[2]), len(radE_vals[3]))
+    print(f"run {run}")
+
+# save everything in a compressed npz file
+np.savez_compressed(output_path, **all_data)
+print(f"Saved all data to {output_path}")
