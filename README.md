@@ -12,18 +12,26 @@ All simulation folders share the same subdirectory structure: `.../particle/ener
 
 2. **/radEnergy**  
    Stores radiation energy of every run in each energy/zenith angle. 
+   /radEnergy/raw: unnormalized radiation energy from submit_RadiationEnergy.py
+   /radEnergy/norm_sintheta2: normalized radiation energy from submit_norm_RadiationEnergy.py
 
-## File Preparation
+## File Description
 
-1. Set path  `functions.py` to the simulation raw data.
-2. Set input parameters in `functions.py`
-3. Decode Binary DATxxxxxx Files `make` and `./corsikaReader /data/sim/IceCubeUpgrade/CosmicRay/Radio/coreas/data/continuous/star-patte
-rn/proton/lgE_18.0/sin2_0.8/000???/DAT000??? --thinned`. This step generates decoded particle files in the `/Particles` directory.
+**submit_** and **job_** files are for mass run in npx HTCondor
 
-## Calculating radiation energy for multiple events
+1. radiation energy: `submit_RadiationEnergy.py` --> store output in /radEnergy/raw
+2. radiation energy normalization: `submit_norm_RadiationEnergy.py` --> store output in /radEnergy/norm_sintheta2
+3. plot radiation energy every primary particle bins: `submit_RadiationEnergyPlot.py` --> store output in /figure/RadiationEnergy
+4. get zenith angle of each shower: `submit_ZenithRun.py` --> store output in /ZenithAngle
+5. get Xmax and number of particles at Xmax: `submit_Xmax_ParseAndFitLongitudinalProfile.py` --> store output in /Xmax
 
-Run the python script: `RadiationEnergy.py`
+run in npx: 
+ssh npx-submitter
+condor_submit job_[task].sub
 
 ## Making Plots
 
-Run the Jupyter notebook: `corsikaPlot.ipynb`
+1. Radio emission and scintillator response: `CorsikaPlot.ipynb`
+2. Shower profile" `profilefittingplot.ipynb`
+
+call function from function.py
