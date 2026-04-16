@@ -8,7 +8,8 @@ import os
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from scipy import integrate
 from scipy import signal, fft, constants, optimize
-
+from corsikaio import CorsikaParticleFile
+import random
 
 #=====================================
 # set primary particle parameters
@@ -32,8 +33,9 @@ fp_radio = lambda primary, energy, sin2theta, runnum, ant: f'{rawdata}/{primary}
 fp_Nmu = lambda primary, energy, sin2theta, runnum: f'Particles/{primary}/{energy}/sin2_{sin2theta}/DAT{runnum:06d}_mupm.npz'
 fp_Ne = lambda primary, energy, sin2theta, runnum: f'Particles/{primary}/{energy}/sin2_{sin2theta}/DAT{runnum:06d}_epm.npz'
 fp_Nelectron = lambda primary, energy, sin2theta, runnum: f'Particles/{primary}/{energy}/sin2_{sin2theta}/DAT{runnum:06d}_electron.npz'
-fp_Nmu_tot = lambda primary, energy, sin2theta: f'Particles/{primary}/{energy}/sin2_{sin2theta}/TOTAL_mupm.dat'
-fp_Ne_tot = lambda primary, energy, sin2theta: f'Particles/{primary}/{energy}/sin2_{sin2theta}/TOTAL_epm.dat'
+fp_groundTot = lambda primary, energy, sin2theta: f'GroundTotalParticles/{primary}_{energy}_{sin2theta}.npz'
+# fp_Nmu_tot = lambda primary, energy, sin2theta: f'Particles/{primary}/{energy}/sin2_{sin2theta}/TOTAL_mupm.dat'
+# fp_Ne_tot = lambda primary, energy, sin2theta: f'Particles/{primary}/{energy}/sin2_{sin2theta}/TOTAL_epm.dat'
 fp_RadE = lambda primary, energy, sin2theta: f'radEnergy/raw/{primary}_{energy}_{sin2theta}.npz'
 # fp_RadE_norm1 = lambda primary, energy, sin2theta: f'radEnergy/norm_sintheta/{primary}_{energy}_{sin2theta}.dat'
 fp_RadE_norm2 = lambda primary, energy, sin2theta: f'radEnergy/norm_sintheta2/{primary}_{energy}_{sin2theta}.npz'
@@ -47,8 +49,14 @@ fp_DAT = lambda primary, energy, sin2theta, runnum: f'{rawdata}/{primary}/{energ
 e0 = 8.854e-12 # vacuum permittivity constant (F/m)
 c = 2.99e8 # speed of light in vacuum (m/s)
 bin_width = 2e-10 #Time resolution
+mumass = 0.105658 #muon mass in GeV/c^2
+emass = 5.11e-4 #electron mass in GeV/c^2
 
 # functions
+
+# kinetic energy 
+def Ekin(px,py,pz,m):
+    return np.sqrt(px**2 + py**2 + pz**2 + m**2) -m 
 
 # energy fluence
 def energyfluence(sumE2):
@@ -510,19 +518,17 @@ def pltmuecorr(energydir, sin2theta, energylabel):
     ironcolor = 'blue'
     scattersize = 5
     
-    protonpath = f'Particles/proton/{energydir}/sin2_{sin2theta}'
-    mudata = np.loadtxt(protonpath + '/TOTAL_mupm.dat')
-    ptotmu = mudata[:,5]
-    edata = np.loadtxt(protonpath + '/TOTAL_epm.dat')
-    ptote = edata[:,5]
+    protonpath = f'GroundTotalParticles/proton_lgE_{energydir}_{sin2theta}.npz'
+    protondata = np.load(protonpath)
+    ptotmu = protondata['nMu'] # total +-muon at ground
+    ptote = protondata['nEP']  # total +- e at ground
     
     plt.scatter(ptote, ptotmu, color = protoncolor, s = scattersize, label = 'proton')
     
-    ironpath = f'Particles/iron/{energydir}/sin2_{sin2theta}'
-    mudata = np.loadtxt(ironpath + '/TOTAL_mupm.dat')
-    fetotmu = mudata[:,5]
-    edata = np.loadtxt(protonpath + '/TOTAL_epm.dat')
-    fetote = edata[:,5]
+    ironpath = f'GroundTotalParticles/iron_lgE_{energydir}_{sin2theta}.npz'
+    irondata = np.load(ironpath)
+    fetotmu = irondata['nMu'] # total +-muon at ground
+    fetote = irondata['nEP'] # total +- e at ground
     
     plt.scatter(fetote, fetotmu, color = ironcolor, s = scattersize, label = 'iron')
     plt.text(
@@ -559,7 +565,7 @@ def pltRadE_NeXmax(sin2thetas, primary, energy, labels, norm, filtering):
                         plt.ylabel(f'radiation energy (eV)')
                     fileNe = np.loadtxt(fNe_tot)
                     Ne = fileNe[:,3]
-                    fileRadE = np.load(fRadE)
+                    fileRadE = np.load(fRadE, allow_pickle=True)
   
                     if filtering == True: RadE = fileRadE['radE_filtered(eV)']
                     if filtering == False: RadE = fileRadE['radE(eV)']
@@ -631,10 +637,10 @@ def pltNeRatio(energy, style):
             for k in range(len(primary)):
                 p = primary[k]
                 fileXmax = np.loadtxt(fp_Xmax(p, e, sin2theta))
-                fileNeground = np.loadtxt(fp_Ne_tot(p, e, sin2theta))
+                fileNeground = np.load(fp_groundTot(p, e, sin2theta), allow_pickle= True)
                 Ne_Xmax = fileXmax[:,5]
                 Xmax = fileXmax[:,1]
-                Ne_ground = fileNeground[:,5]
+                Ne_ground = fileNeground['nEP'] # total number of +-e at ground
                 
                 ratio = Ne_ground/Ne_Xmax
 
@@ -750,7 +756,8 @@ def pltNeXmaxRadEAllzenith( primary, energy, filtering, style, corr):
                 costheta = np.cos(theta)
 
                 Xv = X0/ costheta
-
+                
+                # print(len(sin2alpha), len(runnum), len(RadE), len(RadE_unnorm))
                 # Exclude data if Xmax is negative value 
                 mask = Xmax >= 0
                 Xmax = Xmax[mask]
@@ -901,7 +908,7 @@ def pltRadE_NeGround(sin2thetas, primary, energy, labels, norm, filtering):
             e = energy[i]
             for sin2theta, c in zip(sin2thetas, colors):
 
-                fNe_tot = fp_Ne_tot(p, e, sin2theta)
+                fNe_tot = fp_groundTot(p, e, sin2theta)
                 fRadE = fp_RadE(p, e, sin2theta)
                 if norm == True:
                     fRadE = fp_RadE_norm2(p, e, sin2theta)
@@ -909,9 +916,9 @@ def pltRadE_NeGround(sin2thetas, primary, energy, labels, norm, filtering):
                 if norm == False:
                     fRadE = fp_RadE(p, e, sin2theta)
                     plt.ylabel(f'radiation energy (eV)')
-                fileNe = np.loadtxt(fNe_tot)
-                Ne = fileNe[:,5]
-                fileRadE = np.load(fRadE)
+                fileNe = np.load(fNe_tot, allow_pickle=True)
+                fileRadE = np.load(fRadE, allow_pickle=True)
+                Ne = fileNe["nEP"]
                 if filtering == True: RadE = fileRadE['radE_filtered(eV)']
                 if filtering == False: RadE = fileRadE['radE(eV)']
 
@@ -934,3 +941,134 @@ def pltRadE_NeGround(sin2thetas, primary, energy, labels, norm, filtering):
         plt.yscale('log')
         plt.title(rf'primary particle: {p}, filtering = {filtering}')
         plt.show()
+
+
+
+def pltEdepEkin(primary, energy, sin2theta, run):
+
+    file_path = (f'/data/sim/IceCubeUpgrade/CosmicRay/Radio/coreas/data/continuous/star-pattern/{primary}/{energy}/sin2_{sin2theta}/{run:06d}/DAT{run:06d}')
+    file_input = (f"/data/sim/IceCubeUpgrade/CosmicRay/Radio/coreas/data/continuous/star-pattern/{primary}/{energy}/sin2_{sin2theta}/{run:06d}/SIM{run:06d}.inp")
+
+
+    with open(file_input) as f:
+        for line in f:
+            parts = line.split()
+            if parts[0] == "THETAP":
+                thetap = float(parts[1])
+
+
+    with CorsikaParticleFile(file_path, thinning= True) as file:
+        # we only have one event per file, we can grab it like this
+        event = next(file)
+
+    # get the particle info
+    #print(event.particles.dtype.names)
+    particle_id = event.particles['particle_description'] // 1000 # corsika particle ID
+    x = event.particles['x'] # x coordinate
+    y = event.particles['y'] # y coordinate
+    px = event.particles['px'] # momentum component in x direction in GeV
+    py = event.particles['py'] # momentum component in y direction in GeV
+    pz = event.particles['pz'] # momentum component in z direction in GeV
+    weight = event.particles['thinning_weight'] # particle weight 
+
+    # get indices of muons
+    idx_mu = np.where((particle_id == 5) | (particle_id == 6))
+    idx_epm = np.where((particle_id == 2) | (particle_id == 3))
+    idx_electron = np.where((particle_id == 3))
+
+    # Kinetic energy in GeV
+    Ek_mu = Ekin(px[idx_mu], py[idx_mu], pz[idx_mu], mumass) * weight[idx_mu]
+    Ek_epm = Ekin(px[idx_epm], py[idx_epm], pz[idx_epm], emass) * weight[idx_epm]
+    Ek_electron = Ekin(px[idx_electron], py[idx_electron], pz[idx_electron], emass) * weight[idx_electron]
+
+    # zenith angle for normalization
+    theta = np.deg2rad(thetap)
+
+    ############################# SCINTILLATOR RESPONSE #############################   
+
+    # digitized data from Agnieszka's thesis
+    dfe = pd.read_csv('ScintillatorResponse/electron_0.0.csv')
+    dmu = pd.read_csv('ScintillatorResponse/muon_0.0.csv')
+    digitized_files = [dfe, dmu]
+    Ek_array = [Ek_electron, Ek_mu]
+    plt_title = [rf'$e^{{-}}$', rf'$\mu^{{\pm}}$']
+    savefile = ['electron', 'muon']
+
+    for i in range(len(digitized_files)):
+
+        df = digitized_files[i]
+        df_x = df['x']
+        df_y = df[' y'] / np.cos(theta) # normalized by cos(zenith)
+
+        # interpolate digitized data
+        interpolate_x = np.linspace(min(df_x), max(df_x), num = 400)
+        interpolate_y = np.interp(interpolate_x, df_x, df_y)
+
+        # Deposited energy as a function of Ek from CORSIKA file
+        logEk = np.log10(Ek_array[i])
+        corsika_x = logEk
+        corsika_y = np.interp(corsika_x, df_x, df_y)
+
+        total_Edep = sum(corsika_y)
+
+
+        # make a scatter plot
+        fig1, ax1 = plt.subplots() 
+        fig2, ax2 = plt.subplots()
+
+        # generate randon Gaussian fluctuation
+        Edep = interpolate_y
+        for ft in range (len(Edep)):
+            yfluc = []
+            xfluc = []
+            for j in range(20):
+                fluct = random.gauss(1, 0.5)
+                fEdep = Edep[ft]*fluct
+                yfluc.append(fEdep)
+                xfluc.append(interpolate_x[ft])
+            if ft == 0:
+                ax1.scatter(xfluc, yfluc, s = 2, alpha = 0.3, color = 'lightskyblue', label = 'Gaussian fluctuation')
+            else: ax1.scatter(xfluc, yfluc, s = 2, alpha = 0.3, color = 'lightskyblue')
+
+
+        interpolate_xcorr = np.linspace(min(corsika_x), max(corsika_x), num = 400)
+        interpolate_ycorr = np.interp(interpolate_xcorr, df_x, df_y)
+        Edep = interpolate_ycorr
+
+        for ft in range (len(Edep)):
+            cor_yfluc = []
+            cor_xfluc = []
+            for j in range(20):
+                fluct = random.gauss(1, 0.5)
+                fEdep = Edep[ft]*fluct
+                cor_yfluc.append(fEdep)
+                cor_xfluc.append(interpolate_xcorr[ft])
+            if ft == 0:
+                ax2.scatter(cor_xfluc, cor_yfluc, s = 2, alpha = 0.3, color = 'wheat', label = 'Gaussian fluctuation')
+            else: ax2.scatter(cor_xfluc, cor_yfluc, s = 2, alpha = 0.3, color = 'wheat')
+
+        fig1.suptitle(f'Digitized Data {plt_title[i]} ')
+        ax1.set_title(f'primary: {primary}, {energy}, {sin2theta}, run {run} ')
+        ax1.scatter(df_x, df_y, s  = 20, color = 'mediumblue', label = 'digitized data')
+        ax1.plot(interpolate_x, interpolate_y, color = 'black', label = '1-D interpolation')
+        ax1.legend()
+        ax1.set_yscale('log')
+        ax1.set_xlabel(rf'$\mathrm{{log_{{10}}(E_{{kin}}/GeV)}}$')
+        ax1.set_ylabel(rf'$\mathrm{{E_{{deposited}}/MeV}}$')
+        ax1.set_ylim(1e-4, 1e2)
+        ax1.set_xlim(-3, 1)
+        ax1.grid('-')
+
+        fig2.suptitle(f'CORSIKA Data {plt_title[i]} ')
+        ax2.set_title(f'primary: {primary}, {energy}, {sin2theta}, run {run} ')
+        ax2.scatter(corsika_x, corsika_y, s = 1, color = 'red', label = 'CORSIKA with 1-D interp')
+        ax2.legend()
+        ax2.set_yscale('log')
+        ax2.set_xlabel(rf'$\mathrm{{log_{{10}}(E_{{kin}}/GeV)}}$')
+        ax2.set_ylabel(rf'$\mathrm{{E_{{deposited}}/MeV}}$')
+        ax2.set_ylim(1e-4, 1e2)
+        ax2.set_xlim(-3, None)
+        ax2.grid('-')
+
+        fig1.savefig(f'ScintillatorResponse/{savefile[i]}_digitized', bbox_inches='tight', dpi=400)
+        fig2.savefig(f'ScintillatorResponse/{savefile[i]}_CORSIKA', bbox_inches='tight', dpi=400)

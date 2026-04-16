@@ -1,7 +1,7 @@
-executable = /data/user/wkammeem/CORSIKA/submit_XmaxBash.sh
-arguments = $(particle) $(energy) $(zenith)
+executable = /data/user/wkammeem/CORSIKA/submit_Xmax_ParseAndFitLongitudinalProfile.py
+arguments = $(particle) $(energy) $(zenith) --removeFinal20gcm2
 
-transfer_input_files    = /data/user/wkammeem/CORSIKA/ZenithAngle, /data/user/wkammeem/CORSIKA/submit_Xmax_ParseAndFitLongitudinalProfile.py
+transfer_input_files    = /data/user/wkammeem/CORSIKA/GroundTotalParticles
 transfer_output_files   = Xmax
 
 log    = /scratch/wkammeem/log.$(ClusterId).log

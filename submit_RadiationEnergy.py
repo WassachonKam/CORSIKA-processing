@@ -54,6 +54,8 @@ for run in range(runmin, runmax+1):
         flist = fp_list(p, e, sin2theta, run)
         xypos = pd.read_csv(flist, sep=r"\s+", header=None)
     except FileNotFoundError:
+        for key in all_data.keys():
+            all_data[key].append(np.nan)
         continue   # skip this run entirely
     
     antx = ant_x(xypos[2])
@@ -62,6 +64,8 @@ for run in range(runmin, runmax+1):
     try:
         finp = fp_inp(p, e, sin2theta, run)
     except FileNotFoundError:
+        for key in all_data.keys():
+            all_data[key].append(np.nan)
         continue
     
     with open(finp) as f:
@@ -152,10 +156,14 @@ for run in range(runmin, runmax+1):
     all_data["radE_filtered_vxvxB(eV)"].append(radE_vals_vxvxB[1])
 
 
+final_output = {}
+for key, value in all_data.items():
+    final_output[key] = np.array(value, dtype=object)
+
 output_dir = os.path.dirname(output_path)
 if output_dir and not os.path.exists(output_dir):
     os.makedirs(output_dir, exist_ok=True)
 
 # save everything in a compressed npz file
-np.savez_compressed(output_path, **all_data)
+np.savez_compressed(output_path, **final_output)
 print(f"Saved all data to {output_path}")

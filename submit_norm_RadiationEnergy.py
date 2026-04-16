@@ -39,7 +39,7 @@ all_data = {
     
 }
 
-fileRadE = np.load(input_path1)
+fileRadE = np.load(input_path1, allow_pickle= True)
 
 RadE = fileRadE['radE(eV)']
 RadE_f = fileRadE['radE_filtered(eV)']
@@ -48,25 +48,28 @@ RadE_vxB = fileRadE['radE_vxB(eV)']
 RadE_f_vxB = fileRadE['radE_filtered_vxB(eV)']
 
 # Normalization with sin(alpha)
-index = [int(x) for x in fileRadE['run']]
-
-for i in range(len(index)):
-    r = index[i]
-
+for i in range(200):
+    r = i
     subin_path2 = fp_inp(p, e, sin2theta,r)
     input_path2 = os.path.join(base_dir, subin_path2)
     finp = input_path2
     
-    with open(finp) as f:
-        for line in f:
-            parts = line.split()
-            if parts[0] == "THETAP":
-                thetap = float(parts[1])
-            if parts[0] == "PHIP":
-                phip = float(parts[1])
-            elif parts[0] == "MAGNET":
-                Bx, Bz = float(parts[1]), -float(parts[2]) # input Bz possitive downward
-                By = 0
+    try:
+        with open(finp) as f:
+            for line in f:
+                parts = line.split()
+                if parts[0] == "THETAP":
+                    thetap = float(parts[1])
+                if parts[0] == "PHIP":
+                    phip = float(parts[1])
+                elif parts[0] == "MAGNET":
+                    Bx, Bz = float(parts[1]), -float(parts[2]) # input Bz possitive downwards
+                    By = 0
+
+    except FileNotFoundError:
+        for key in all_data.keys():
+            all_data[key].append(np.nan)
+        continue
                 
     theta = np.deg2rad(thetap)
     phi   = np.deg2rad(phip)
@@ -94,7 +97,6 @@ for i in range(len(index)):
     all_data["radE_vxB(eV)"].append(RadEnew_vxB)
     all_data["radE_filtered_vxB(eV)"].append(RadEnew_f_vxB)
 
-    # if r == 160: print(alpha)
 output_dir = os.path.dirname(output_path)
 if output_dir and not os.path.exists(output_dir):
     os.makedirs(output_dir, exist_ok=True)
@@ -103,6 +105,5 @@ if output_dir and not os.path.exists(output_dir):
 np.savez_compressed(output_path, **all_data)
 print(f"Saved all data to {output_path}")
 print(f'{p} {e} {sin2theta} normalization done.')
-# print(all_data["radE_vxB(eV)"])
 
             

@@ -14,40 +14,105 @@ from scipy.optimize import curve_fit
 import argparse
 import os 
 import glob
+from pathlib import Path
 
-parser = argparse.ArgumentParser()
-# parser.add_argument("input", type=str, help="Input data files.")
-# parser.add_argument("--zen", required=True, type=float, help="Zenith angle of the shower (rad)")
 
-parser.add_argument("--longbase", required=True, type=str,
-                    help="Base directory of .long files")
-parser.add_argument("--zenfile", required=True, type=str,
-                    help=".npz file containing zenith info")
+def main():
 
-parser.add_argument("--outfile", required=True, type=str,
-                    help="Output .dat file")
+    parser = argparse.ArgumentParser(description="Process Xmax and Longitudinal Profiles")
+    parser.add_argument("particle", type=str, help="Particle type (e.g., Proton)")
+    parser.add_argument("energy", type=str, help="Energy (e.g., lgE_16.0)")
+    parser.add_argument("sin_val", type=str, help="Zenith sin value (e.g., 0.1)")
+    parser.add_argument("--removeFinal20gcm2", action="store_true", help="Remove final 20 g/cm2")
 
-parser.add_argument("--removeFinal20gcm2", action="store_true", help="Remove final 20 g/cm2 from longitudinal profile before fitting.")
+    args = parser.parse_args()
 
-args = parser.parse_args()
+    sin_str = f"sin2_{args.sin_val}"
+    out_dir = Path("Xmax")
+    out_dir.mkdir(parents=True, exist_ok=True)
 
-# def load_zeniths(zenfile):
-#     zenith_dict = {}
+    longbase = Path(f"/data/sim/IceCubeUpgrade/CosmicRay/Radio/coreas/data/continuous/star-pattern/{args.particle}/{args.energy}") / sin_str
+    zenfile = Path("./GroundTotalParticles") / f"{args.particle}_{args.energy}_{args.sin_val}.npz"
+    outfile = out_dir / f"{args.particle}_{args.energy}_{sin_str}.dat"
 
-#     with open(zenfile) as f:
-#         for line in f:
-#             line = line.strip()
-#             if not line or line.startswith("#"):
-#                 continue
+    # load zenith data
+    zenith_dict = {}
+    if zenfile.exists():
+        zenith_dict = load_zeniths(str(zenfile))
+    else:
+        print(f"ERROR: Zenith file missing: {zenfile}")
 
-#             cols = [c.strip() for c in line.split()]
+    results = {}
 
-#             run = int(cols[0])                 # RunNumber
-#             zenith = float(cols[3])       # column 3 = Zenith
+    # Run loop (0-199)
+    for run_id in range(200):
+        run_str = f"{run_id:06d}"
+        pattern = str(longbase / run_str / f"DAT{run_str}.long")
+        found_files = glob.glob(pattern)
 
-#             zenith_dict[run] = zenith
+        # default 1 run number and 8 nan 
+        # run, xmax, mupm_ground, totalEM_Xmax, epm_ground, NmaxFit, XmaxFit, X0Fit, lambFit
+        current_run_results = [float(run_id)] + [np.nan] * 8
 
-#     return zenith_dict
+        if found_files and os.path.getsize(found_files[0]) > 0:
+            longfile = found_files[0]
+            
+            try:
+                # Parse file
+                depths, positrons, electrons, muPlus, muMinus, chargedParticles, xmax_val, Rcorsika, Lcorsika, x0, lambdaApprox = LongFileParser(longfile)
+                
+                # xmax_val from CORSIKA header
+                current_run_results[1] = xmax_val
+
+                # calculate values at ground from zenith data
+                if run_id in zenith_dict:
+                    zen = zenith_dict[run_id]
+                    totalEM = np.array(positrons) + np.array(electrons)
+                    ixmax = np.argmax(totalEM)
+                    ground = 870 / np.cos(zen)
+                    indGround = FindGroundIndex(ground, depths)
+                    
+                    current_run_results[2] = round(muPlus[indGround] + muMinus[indGround])
+                    current_run_results[3] = totalEM[ixmax]
+                    current_run_results[4] = round(positrons[indGround] + electrons[indGround])
+
+                    # Fit Profile
+                    if args.removeFinal20gcm2:
+                        depthSpacing = depths[1] - depths[0]
+                        numPointsToRemove = int(20.0 / depthSpacing)
+                        if numPointsToRemove > 0:
+                            depths = depths[:-numPointsToRemove]
+                            positrons = positrons[:-numPointsToRemove]
+                            electrons = electrons[:-numPointsToRemove]
+
+                    totalEMList = (np.array(positrons) + np.array(electrons)).tolist()
+                    totalEMList, depths_clean = remove_zeros(totalEMList, depths)
+                    
+                    fit_res = FitLongitudinalProfile(depths_clean, totalEMList, np.max(totalEM), depths[ixmax], 0, 80.0)
+                    
+                    # fit_res returns (RFit, RFitSig, LFit, LFitSig, XmaxFitShift, XmaxSig, NmaxFit, XmaxFit, X0Fit, lambFit)
+                    current_run_results[5] = fit_res[6] # NmaxFit
+                    current_run_results[6] = fit_res[7] # XmaxFit
+                    current_run_results[7] = fit_res[8] # X0Fit
+                    current_run_results[8] = fit_res[9] # lambFit
+
+            except Exception as e:
+                print(f"Warning: Run {run_id} partially failed: {e}")
+                # let the rest values be nan
+
+        results[run_id] = current_run_results
+
+
+    with open(outfile, "w") as f:
+        f.write("# run xmax mupm_ground totalEM_Xmax epm_ground NmaxFit XmaxFit X0Fit lambFit\n")
+        for run_id in range(200):
+            line = " ".join(f"{val:.6g}" for val in results[run_id])
+            f.write(line + "\n")
+    
+    print(f"Task completed! Output: {outfile}")
+
+
+
 def load_zeniths(zenfile):
 
     data = np.load(zenfile)
@@ -61,10 +126,6 @@ def load_zeniths(zenfile):
 
     return zenith_dict
 
-long_files = glob.glob(
-    os.path.join(args.longbase, "**", "DAT*.long"),
-    recursive=True
-)
 
 def get_run_from_longfile(longfile):
     # .../000123/DAT000123.long → 000123
@@ -283,155 +344,6 @@ def remove_zeros(listToUpdate, pairedList):
 # # TO-DO: Insert a keyword that defines the observation level from either a settings file or command line argument
 # ground = 870 / np.cos(args.zen)
 
-
-zenith_dict = load_zeniths(args.zenfile)
-results = {}
-
-
-###########################  MAIN LOOP ###################################
-
-for longfile in long_files:
-
-     # skip empty files
-    if os.path.getsize(longfile) == 0:
-        print(f"WARNING: skipping empty file {longfile}")
-        continue
-
-    run = get_run_from_longfile(longfile)
-    if run not in zenith_dict:
-        print(f"WARNING: no zenith for run {run}, skipping")
-        continue
-
-    try:
-        depths, positrons, electrons, muPlus, muMinus, chargedParticles, \
-            xmax, Rcorsika, Lcorsika, x0, lambdaApprox = LongFileParser(longfile)
-    except Exception as e:
-        print(f"WARNING: skipping corrupted file {longfile} ({e})")
-        continue
-
-    zen = zenith_dict[run]
-    
-    totalEM = np.array(positrons) + np.array(electrons)
-    ixmax = np.argmax(totalEM)
-
-
-    ground = 870 / np.cos(zen)
-
-    indGround = FindGroundIndex(ground, depths)
-    
-    muPlusGround = muPlus[indGround]
-    muMinusGround = muMinus[indGround]
-    
-    positronsGround = positrons[indGround]
-    electronsGround = electrons[indGround]
-    
-    # Remove final 20g/cm2 from fit because they are not physical
-    # My understanding is some part of the shower front reaches ground which causes dip in particle numbers...
-    if args.removeFinal20gcm2 == True:
-        depthSpacing = depths[1] - depths[0]
-        numPointsToRemove = int(20.0 / depthSpacing)
-        del depths[-numPointsToRemove:]
-        del positrons[-numPointsToRemove:]
-        del electrons[-numPointsToRemove:]
-        del muPlus[-numPointsToRemove:]
-        del muMinus[-numPointsToRemove:]
-        del chargedParticles[-numPointsToRemove:]
-    
-    Nmax = np.max(totalEM)
-    NmaxGuess = Nmax
-    # Prevent errors if xmax is near ground level (i.e. ixmax is last index)
-    if ixmax >= len(depths):
-        XmaxGuess = xmax
-    else:
-        XmaxGuess = depths[ixmax]
-    X0Guess = 0
-    lambGuess = 80.0
-    
-    totalEMUpdate = np.array(positrons) + np.array(electrons)
-    totalEMList = totalEMUpdate.tolist()
-    
-    # Put removal of zeros after all index calls are done, to ensure all indices are the same
-    totalEMList, depths = remove_zeros(totalEMList, depths)
-    
-    totalEMAfterCuts = np.array(totalEMList)
-    
-    NPrimeValsCORSIKA = totalEMAfterCuts / Nmax
-    RGuess = np.sqrt(lambGuess / abs(X0Guess - XmaxGuess))
-    LGuess = np.sqrt(abs(X0Guess - XmaxGuess) * lambGuess)
-    
-    RFitShift, RFitSigmaShift, LFitShift, LFitSigmaShift, XmaxFitShift, XmaxSigmaShift, NmaxFit, XmaxFit, X0Fit, lambFit  = FitLongitudinalProfile(depths, totalEMList, NmaxGuess, XmaxGuess, X0Guess, lambGuess, shift=False, absoluteValue=False)
-    # XmaxAndringaFit, XmaxAndringaSigma, RAndringaFit, RAndringaSigma, LAndringaFit, LAndringaSigma,  Xmax, R, L = FitLongitudinalProfileAndringa(depths, NPrimeValsCORSIKA, XmaxGuess, RGuess, LGuess, shift=False, absoluteValue=False) #parameterized
-
-
-    # results[run] = (
-    #     run, 
-    #     xmax,
-    #     round(muPlusGround + muMinusGround),
-    #     totalEM[ixmax],
-    #     round(positronsGround + electronsGround),
-    #     Rcorsika,
-    #     Lcorsika,
-    #     RFitShift,
-    #     RFitSigmaShift,
-    #     LFitShift,
-    #     LFitSigmaShift,
-    #     XmaxFitShift,
-    #     XmaxSigmaShift,
-    #     RAndringaFit,
-    #     RAndringaSigma,
-    #     LAndringaFit,
-    #     LAndringaSigma,
-    #     XmaxAndringaFit,
-    #     XmaxAndringaSigma
-    # )
-
-    results[run] = (
-        run, 
-        xmax,
-        round(muPlusGround + muMinusGround),
-        totalEM[ixmax],
-        round(positronsGround + electronsGround),
-        NmaxFit, XmaxFit, X0Fit, lambFit
-    )
-
-    # results[run] = (
-    #     run, 
-    #     xmax,
-    #     round(muPlusGround + muMinusGround),
-    #     totalEM[ixmax],
-    #     round(positronsGround + electronsGround),
-    #     Xmax, R, L
-    # )
-
-output_dir = os.path.dirname(args.outfile)
-if output_dir and not os.path.exists(output_dir):
-    print(f"Creating output directory: {output_dir}")
-    os.makedirs(output_dir, exist_ok=True)
-
-with open(args.outfile, "w") as f:
-    # Header
-    # f.write(
-    #     "# run xmax mupm_ground totalEM_Xmax epm_ground "
-    #     "Rcorsika Lcorsika "
-    #     "RFitShift RFitSigmaShift "
-    #     "LFitShift LFitSigmaShift "
-    #     "XmaxFitShift XmaxSigmaShift "
-    #     "RAndringaFit RAndringaSigma "
-    #     "LAndringaFit LAndringaSigma "
-    #     "XmaxAndringaFit XmaxAndringaSigma\n"
-    # )
-
-    f.write(
-        "# run xmax mupm_ground totalEM_Xmax epm_ground "
-        "NmaxFit, XmaxFit, X0Fit, lambFits \n"
-    )
-
-    # Write runs in order 0 → 199
-    for run in range(200):
-        if run not in results:
-            continue   # skip missing runs safely
-
-        line = " ".join(f"{val:.6g}" for val in results[run])
-        f.write(line + "\n")
-print(f"File write successful: {os.path.exists(args.outfile)}")
+if __name__ == "__main__":
+    main()
 

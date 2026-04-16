@@ -1,9 +1,5 @@
 executable = /data/user/wkammeem/CORSIKA/submit_RadiationEnergy.py
 arguments = --particle $(p) --energy $(e) --zenith $(z) 
-#mkdir -p /scratch/wkammeem/logs
-#output = /scratch/wkammeem/logs/job.$(Cluster).$(Process).out
-#error  = /scratch/wkammeem/logs/job.$(Cluster).$(Process).err
-#log    = /scratch/wkammeem/logs/job.$(Cluster).log
 
 transfer_input_files    = functions.py
 log    = /scratch/wkammeem/log.$(ClusterId).log

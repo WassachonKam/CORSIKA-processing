@@ -4,10 +4,8 @@
 // Or can run command "make" in file directory (as long as accompanied Makefile is also in directory...)
 //
 // Usage (after compilation):
-// ./corsikaReader PATH_TO_CORSIKA_OUTPUT_FILE --FILE_FLAG
-//
-// Output (printed to terminal):
-// PRIMARY_ID PRIMARY_ENERGY ZENITH AZIMUTH MUON_NUM_TOT MUON_NUM_ECUT
+// ./corsikaReader PARTICLE ENERGY SIN2THETA --FILE_FLAG
+
 
 #include <iostream>
 #include <fstream>
@@ -74,13 +72,25 @@ enum class SimType {Thinned, Standard};
 
 int main(int argc, char *argv[]) {
 
-    if (argc < 3) {
-        cerr << "Usage: ./corsikaReader <InputFileName> --thinned|--standard\n";
+    // if (argc < 3) {
+    //     cerr << "Usage: ./corsikaReader <InputFileName> --thinned|--standard\n";
+    //     return 0;
+    // }
+    if (argc < 5) {
+        cerr << "Usage: ./corsikaReader <particle> <energy> <angle> --FILE_FLAG" << endl;
+        cerr << "Example: ./corsikaReader proton lgE_18.0 sin2_0.8 --thinned" << endl;
         return 0;
     }
 
-    string filePath = argv[1];
-    string fileFlag = argv[argc - 1];
+    std::string primary = argv[1];   // รับ "proton"
+    std::string energy  = argv[2];   // รับ "lgE_18.0"
+    std::string theta   = argv[3];   // รับ "sin2_0.8"
+    std::string fileFlag = argv[argc - 1]; // ตัวสุดท้ายเสมอ
+    std::string basePath = "/data/sim/IceCubeUpgrade/CosmicRay/Radio/coreas/data/continuous/star-pattern/";
+    std::string filePath = basePath + primary + "/" + energy + "/sin2_" + theta + "/000???" + "/DAT000???";
+
+    // string filePath = argv[1];
+    // string fileFlag = argv[argc - 1];
 
     SimType mode;
     if      (fileFlag == "--thinned") mode = SimType::Thinned;
@@ -102,30 +112,21 @@ int main(int argc, char *argv[]) {
     // vector<string> particles = {"mupm", "epm", "positron", "electron", "posmu", "negmu"};
 
     // string primary = "proton";
-    // string energy = "lgE_16.0";
-    // string theta = "sin2_0.0";
+    // string energy = "lgE_18.0";
+    // string theta = "sin2_0.1";
 
-    #ifndef PRIMARY
-    #define PRIMARY "proton"
-    #endif
-
-    #ifndef ENERGY
-    #define ENERGY "lgE_16.0"
-    #endif
-
-    #ifndef THETA
-    #define THETA "sin2_0.0"
-    #endif
-
-    string primary = PRIMARY;
-    string energy = ENERGY;
-    string theta = THETA;
-
-    cout << "corsikaReader " << primary << " " << energy << " " << theta << endl;
+    // cout << "corsikaReader " << primary << " " << energy << " " << theta << endl;
 
     // Create output directories
-    string out_dir = "Particles/" + primary + "/" + energy + "/" + theta;
+    string out_dir = "/data/user/wkammeem/CORSIKA/Particles/" + primary + "/" + energy + "/sin2_" + theta;
+    string mkdir_cmd = "mkdir -p " + out_dir;
+    system(("mkdir -p " + out_dir).c_str());
+    system(mkdir_cmd.c_str());
 
+    glob_t glob_result;
+    glob(filePath.c_str(), GLOB_TILDE, NULL, &glob_result);
+
+    cout << "processing " + primary + " "+ energy + " sin2_" + theta << endl;
     // Loop over particles
     for (const auto& particle : particles) {
         int idpa1 = -1, idpa2 = -1;
@@ -136,13 +137,15 @@ int main(int argc, char *argv[]) {
         // else if (particle == "posmu") { idpa1 = 5; idpa2 = 5; }
         // else if (particle == "negmu") { idpa1 = 6; idpa2 = 6; }
 
-        ofstream fout_total(out_dir + "/TOTAL_" + particle + ".dat");
-        fout_total << "#RunNumber PrimaryID PrimaryEnergy Zenith Azimuth TotalNumber\n";
+        // ofstream fout_total(out_dir + "/TOTAL_" + particle + ".dat");
+        // fout_total << "#RunNumber PrimaryID PrimaryEnergy Zenith Azimuth TotalNumber\n";
 
         // Loop over input files
-        for (int k = 1; k < argc - 1; ++k) {
+        for (size_t k = 0; k < glob_result.gl_pathc; ++k) {
+        // for (int k = 1; k < argc - 1; ++k) {
 
-            string file_ = argv[k];
+            // string file_ = argv[k];
+            std::string file_ = glob_result.gl_pathv[k];
 
             // Extract run number
             size_t pos = file_.rfind("DAT");
@@ -206,7 +209,7 @@ int main(int argc, char *argv[]) {
 
             is.close();
             nParticles = round(nParticles);
-            fout_total << runnum << " " << primaryID << " " << primaryEnergy << " " << zenith << " " << azimuth << " " << nParticles << "\n";
+            // fout_total << runnum << " " << primaryID << " " << primaryEnergy << " " << zenith << " " << azimuth << " " << nParticles << "\n";
 
             if (BROKENflag || EVTEcnt != nrShow) {
                 cerr << "File broken or EVTE mismatch: " << file_ << endl;
@@ -227,7 +230,7 @@ int main(int argc, char *argv[]) {
             }
 
         } // end loop over files
-        fout_total.close();
+        // fout_total.close();
     } // end loop over particles
 
     cout << "done." << endl;
