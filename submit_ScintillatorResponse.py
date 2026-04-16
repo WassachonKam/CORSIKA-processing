@@ -38,7 +38,8 @@ all_data = {
             "primaryE": [],
             "Edep_e": [],
             "Edep_mu": [],
-            "Edep_epm": []
+            "Edep_epm": [],
+            "Edep_tot": []
 
         }
 
@@ -110,6 +111,7 @@ for run in range(runmin, runmax+1):
     
     ############################# SCINTILLATOR RESPONSE #############################   
 
+    total_Edep_all = 0 
     Ek_array = [Ek_electron, Ek_mu]
     for i in range(len(digitized_files)):
 
@@ -126,11 +128,14 @@ for run in range(runmin, runmax+1):
         corsika_x = logEk
         corsika_y = np.interp(corsika_x, df_x, df_y)
 
-        total_Edep = sum(corsika_y)
+        total_Edep = sum(corsika_y) # total deposited energy of every particles shared the same type
+        total_Edep_all += total_Edep # total deposited energy of every particles types
 
         if i == 0: all_data["Edep_e"].append(total_Edep)
         elif i == 1: all_data["Edep_mu"].append(total_Edep)
-    # print(run,total_Edep)
+    
+    all_data["Edep_tot"].append(total_Edep_all)
+    
 output_dir = "/data/user/wkammeem/CORSIKA/TotalEdepScint"
 if not os.path.exists(output_dir):
     os.makedirs(output_dir)
