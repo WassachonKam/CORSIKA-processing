@@ -1,0 +1,18 @@
+executable = /data/user/wkammeem/CORSIKA/submit_ScintillatorResponse.py
+arguments = --particle $(p) --energy $(e) --zenith $(z) 
+
+transfer_input_files    = /data/user/wkammeem/CORSIKA/ScintillatorResponse
+log    = /scratch/wkammeem/log.$(ClusterId).log
+error  = /scratch/wkammeem/error.$(ClusterId).err
+output = /data/user/wkammeem/CORSIKA/logs/output.$(ClusterId).out
+should_transfer_files = YES
+when_to_transfer_output = ON_EXIT
+
+notification = never
+
+request_cpus = 1
+request_memory = 6GB 
+request_disk = 2GB
+#request_gpus = 1
+queue p, e, z from params_all.txt
+
