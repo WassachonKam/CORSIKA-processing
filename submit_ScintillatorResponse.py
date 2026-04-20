@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Usage: python3 ScintillatorResponse.py -p proton -e lgE_16.2 -z 0.0 
+# Usage: python3 submit_ScintillatorResponse.py -p proton -e lgE_16.2 -z 0.0 
 import argparse
 import numpy as np
 import matplotlib.pyplot as plt
@@ -102,9 +102,9 @@ for run in range(runmin, runmax+1):
     idx_electron = np.where((particle_id == 3))
 
     # Kinetic energy in GeV
-    Ek_mu = Ekin(px[idx_mu], py[idx_mu], pz[idx_mu], mumass) * weight[idx_mu]
-    Ek_epm = Ekin(px[idx_epm], py[idx_epm], pz[idx_epm], emass) * weight[idx_epm]
-    Ek_electron = Ekin(px[idx_electron], py[idx_electron], pz[idx_electron], emass) * weight[idx_electron]
+    Ek_mu = Ekin(px[idx_mu], py[idx_mu], pz[idx_mu], mumass)
+    Ek_epm = Ekin(px[idx_epm], py[idx_epm], pz[idx_epm], emass) 
+    Ek_electron = Ekin(px[idx_electron], py[idx_electron], pz[idx_electron], emass) 
 
     # zenith angle for normalization
     theta = np.deg2rad(thetap)
@@ -112,7 +112,11 @@ for run in range(runmin, runmax+1):
     ############################# SCINTILLATOR RESPONSE #############################   
 
     total_Edep_all = 0 
+
+    # Define array of particle types
     Ek_array = [Ek_electron, Ek_mu]
+    weight_array = [weight[idx_electron], weight[idx_mu]]
+
     for i in range(len(digitized_files)):
 
         df = digitized_files[i]
@@ -128,10 +132,12 @@ for run in range(runmin, runmax+1):
         corsika_x = logEk
         corsika_y = np.interp(corsika_x, df_x, df_y)
 
-        total_Edep = sum(corsika_y) # total deposited energy of every particles shared the same type
+        # Weight deposited energy and calculate the total amount
+        weightedEdep = corsika_y * weight_array[i] # apply weight factor 
+        total_Edep = sum(weightedEdep) # total deposited energy of every particles shared the same type
         total_Edep_all += total_Edep # total deposited energy of every particles types
 
-        if i == 0: all_data["Edep_e"].append(total_Edep)
+        if i == 0: all_data["Edep_e"].append(total_Edep) 
         elif i == 1: all_data["Edep_mu"].append(total_Edep)
     
     all_data["Edep_tot"].append(total_Edep_all)
