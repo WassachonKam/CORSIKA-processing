@@ -36,3 +36,6 @@ call function from function.py
 
 1. Radio emission and scintillator response: `CorsikaPlot.ipynb`
 2. Shower profile" `profilefittingplot.ipynb`
+
+## Random Forest Regression
+Once we have all data from `submit_` files, run regression using `MuonPredictionRandomForest.py`
