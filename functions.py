@@ -190,7 +190,7 @@ def ExpoNeRatio(dXmax, delta,A):
 def Pred_Nmu(alpha, beta, delta, gamma, A, b, Edep, Erad, dXmax):
 	return (1/beta)*(Edep - ((alpha*A/gamma)*np.exp(-dXmax/delta)*(Erad-b)))
 
-def RegressionEnergyBin(ThreshR, filteringXmax, energy_all, lgE_GeV_bin, NmuNorm):
+def RegressionFixedEnergyBin(ThreshR, filteringXmax, energy_all, lgE_GeV_bin, NmuNorm):
 	df = pd.read_parquet(f'RandomForestRegression/data_for_regression_{ThreshR}_Xmax_{filteringXmax}_NmuNorm_{NmuNorm}.parquet')
 	titlelabel =  f'filtering underground showers = {filteringXmax}, R > {ThreshR}'
 
@@ -364,7 +364,7 @@ def RegressionEnergyBin(ThreshR, filteringXmax, energy_all, lgE_GeV_bin, NmuNorm
 	ax.set_ylim(-0.16,0.16)
 	ax.hlines(y= 0, xmin = min(zenith_bins), xmax= max(zenith_bins), colors = 'k', linestyles =  '--')
 
-def RegressionZenithBin(ThreshR, filteringXmax, zenith_all, sin2_bin, NmuNorm):
+def RegressionFixedZenithBin(ThreshR, filteringXmax, zenith_all, sin2_bin, NmuNorm):
 	df = pd.read_parquet(f'RandomForestRegression/data_for_regression_{ThreshR}_Xmax_{filteringXmax}_NmuNorm_{NmuNorm}.parquet')
 	titlelabel =  f'filtering underground showers = {filteringXmax}, R > {ThreshR}'
 
@@ -1691,7 +1691,6 @@ def pltRadE_NeGround(sin2thetas, primary, energy, labels, norm, filtering):
 		plt.yscale('log')
 		plt.title(rf'primary particle: {p}, filtering = {filtering}')
 		plt.show()
-
 
 # Plot deposited energy vs kinetic energy
 def pltEdepEkin(primary, energy, sin2theta, run):

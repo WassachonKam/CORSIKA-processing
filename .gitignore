@@ -16,3 +16,4 @@ ZenithAngle/
 corsikaReader
 000000/
 *.pkl
+*.parquet

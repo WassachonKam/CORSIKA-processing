@@ -15,7 +15,7 @@ plt.rcParams.update({
     "mathtext.fontset": "stix",
 })
 
-def pltNeXmaxRadEAllzenith( primary, energy, filtering, style, corr, pdf_pages=None):
+def pltNeXmaxRadEAllzenith( p, e, filtering, style, corr, pdf_pages=None):
     sin2thetas = ["0.0", "0.1", "0.2", "0.3", "0.4", "0.5", "0.6", "0.7",  "0.8", "0.9"]
     X0 = 697.6 #g/cm^2
 
@@ -28,7 +28,7 @@ def pltNeXmaxRadEAllzenith( primary, energy, filtering, style, corr, pdf_pages=N
         fig.subplots_adjust(wspace=0.05, hspace = 0.1, top = 0.93)
 
 
-    fig.suptitle(f'{p}, {e}, filtering = {filtering}', fontsize=16)
+    fig.suptitle(f'{p}, {e}, filtering = {filtering}, R > 0', fontsize=16)
 
     for i in range(len(sin2thetas)):
         sin2theta = sin2thetas[i]
@@ -50,8 +50,10 @@ def pltNeXmaxRadEAllzenith( primary, energy, filtering, style, corr, pdf_pages=N
                 c = int(i-5)
                 
         fXmax = f'Xmax/{p}_{e}_sin2_{sin2theta}.dat'
-        fRadE = f'norm_sintheta2/{p}_{e}_{sin2theta}.npz'
-        fRadE_unnorm = f'raw/{p}_{e}_{sin2theta}.npz'
+        fRadE = f'radEnergy/norm_sintheta2/{p}_{e}_{sin2theta}.npz'
+        fRadE_unnorm = f'radEnergy/raw/{p}_{e}_{sin2theta}.npz'
+        fMuon = f'GroundTotalParticles/{p}_{e}_{sin2theta}.npz'
+        fEdep = f'TotalEdepScint/0m/{p}_{e}_{sin2theta}.npz'
 
         fileXmax = np.loadtxt(fXmax)
         Ne = fileXmax[:,5] # Ne at Xmax
@@ -59,6 +61,10 @@ def pltNeXmaxRadEAllzenith( primary, energy, filtering, style, corr, pdf_pages=N
         runnum = fileXmax[:,0]
         fileRadE = np.load(fRadE, allow_pickle=True)
         fileRadE_unnorm = np.load(fRadE_unnorm, allow_pickle=True)
+        fileMuon = np.load(fMuon, allow_pickle= True)
+        fileEdep = np.load(fEdep, allow_pickle=True)
+        Nmu_ground = fileMuon['nMu'] # number of total +-mu at ground
+        Edep = fileEdep["Edep_tot"]
 
 
         if filtering == True: 
@@ -96,6 +102,8 @@ def pltNeXmaxRadEAllzenith( primary, energy, filtering, style, corr, pdf_pages=N
         RadE_vxB = RadE_vxB[mask]
         RadE_vxvxB = RadE_vxvxB[mask]
         RadE_vxB_norm = RadE_vxB_norm[mask]
+        Edep = Edep[mask]
+        Nmu_ground = Nmu_ground[mask]
 
         ax = axs[r, c]
 
@@ -215,6 +223,22 @@ def pltNeXmaxRadEAllzenith( primary, energy, filtering, style, corr, pdf_pages=N
                 if c == 0: ax.set_ylabel(r"$\mathrm{{E_{{rad,vxB}}}}/ sin^2 \alpha$ (eV)")
                 ax.set_xlabel(rf'$sin^2 \alpha$')
                 plt.colorbar(sc, label=rf"$N_{{e,Xmax}}$", orientation='horizontal')
+        
+        elif corr == 'EradEdep':
+            sc = ax.scatter(Edep, RadE, s=7, c= Nmu_ground, cmap="viridis", vmin = None, vmax = None)
+            ax.set_yscale('log')
+
+            if style == 'verti':
+                if c == 0: ax.set_ylabel(rf" $\mathrm{{E_{{rad}}}}$ (eV) / $\sin^2\alpha$")
+                if r == 4: ax.set_xlabel(rf"$\mathrm{{E_{{deposited}}}}$ (eV)")
+                plt.colorbar(sc, label=rf"$N_{{\mu,ground}}$")
+
+            elif style == 'horiz': 
+                if c == 0: ax.set_ylabel(rf"$\mathrm{{E_{{rad}}}}$ (eV)/ $\sin^2\alpha$")
+                ax.set_xlabel(rf"$\mathrm{{E_{{deposited}}}}$ (eV)")
+                plt.colorbar(sc, label=rf"$N_{{\mu,ground}}$", orientation='horizontal')
+
+        
 
         ax.set_title(rf"$sin^2 \theta = ${sin2theta} ({np.rad2deg(theta):.2f}$^\circ$)")
                 
@@ -236,16 +260,20 @@ p = args.particle
 e = args.energy
 
 style = 'horiz'
-corr =['NeErad', 'NeErad_norm', 'NeXmax', 'EradSina', 'EvxBsina', 'EvxBsina_norm', 'EvxvxBsina', 'EvxvxBNe']
+corr =['NeErad', 'NeErad_norm', 'NeXmax', 'EradSina', 'EvxBsina', 'EvxBsina_norm', 'EvxvxBsina', 'EvxvxBNe', 'EradEdep']
+# corr = ['EradEdep']
+minR = 0
 
-
-output_dir = f'/data/user/wkammeem/CORSIKA/figure/RadiationEnergy/{p}/{e}/'
+output_dir = f'/data/user/wkammeem/CORSIKA/figures/RadiationEnergy/{p}/{e}/'
 if not os.path.exists(output_dir):
     os.makedirs(os.path.dirname(output_dir), exist_ok=True)
 
 output_path = os.path.join(output_dir, f'{p}_{e}_AllPlots.pdf')
 
+# pltNeXmaxRadEAllzenith(p, e, filtering = True, style=style, corr=corr[0], pdf_pages=None)
+
 with PdfPages(output_path) as pdf:
     for i in corr:
         print(f"Plotting: {i}")
         pltNeXmaxRadEAllzenith(p, e, filtering = True, style=style, corr=i, pdf_pages=pdf)
+        

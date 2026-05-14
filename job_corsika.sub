@@ -1,7 +1,7 @@
 executable = /data/user/wkammeem/CORSIKA/corsikaReader
 arguments = $(particle) $(energy) $(zenith) --thinned
 
-transfer_output_files = Particles
+#transfer_output_files = Particles
 log    = /scratch/wkammeem/log.$(ClusterId).log
 error  = /scratch/wkammeem/error.$(ClusterId).err
 output = /data/user/wkammeem/CORSIKA/logs/output.$(ClusterId).out

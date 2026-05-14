@@ -1,7 +1,8 @@
 executable = /data/user/wkammeem/CORSIKA/submit_RadiationEnergyPlot.py
 arguments = --particle $(p) --energy $(e)
 
-transfer_input_files    = /data/user/wkammeem/CORSIKA/Xmax, /data/user/wkammeem/CORSIKA/radEnergy/norm_sintheta2, /data/user/wkammeem/CORSIKA/radEnergy/raw
+#transfer_input_files    = /data/user/wkammeem/CORSIKA/Xmax, /data/user/wkammeem/CORSIKA/radEnergy/norm_sintheta2, /data/user/wkammeem/CORSIKA/radEnergy/raw
+transfer_input_files    = /data/user/wkammeem/CORSIKA/Xmax, /data/user/wkammeem/CORSIKA/radEnergy, /data/user/wkammeem/CORSIKA/GroundTotalParticles, /data/user/wkammeem/CORSIKA/TotalEdepScint
 
 log    = /scratch/wkammeem/log.$(ClusterId).log
 error  = /scratch/wkammeem/error.$(ClusterId).err
