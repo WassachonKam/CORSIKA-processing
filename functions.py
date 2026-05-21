@@ -192,7 +192,7 @@ def Pred_Nmu(alpha, beta, delta, gamma, A, b, Edep, Erad, dXmax):
 
 def RegressionFixedEnergyBin(ThreshR, filteringXmax, energy_all, lgE_GeV_bin, NmuNorm):
 	df = pd.read_parquet(f'RandomForestRegression/data_for_regression_{ThreshR}_Xmax_{filteringXmax}_NmuNorm_{NmuNorm}.parquet')
-	titlelabel =  f'filtering underground showers = {filteringXmax}, R > {ThreshR}'
+	titlelabel =  f'removing underground Xmax = {filteringXmax}, R > {ThreshR}'
 
 	# binning energy and zenith angle 
 	costheta = df['costheta']
@@ -366,7 +366,7 @@ def RegressionFixedEnergyBin(ThreshR, filteringXmax, energy_all, lgE_GeV_bin, Nm
 
 def RegressionFixedZenithBin(ThreshR, filteringXmax, zenith_all, sin2_bin, NmuNorm):
 	df = pd.read_parquet(f'RandomForestRegression/data_for_regression_{ThreshR}_Xmax_{filteringXmax}_NmuNorm_{NmuNorm}.parquet')
-	titlelabel =  f'filtering underground showers = {filteringXmax}, R > {ThreshR}'
+	titlelabel =  f'removing underground Xmax = {filteringXmax}, R > {ThreshR}'
 
 	# binning energy and zenith angle 
 	costheta = df['costheta']
@@ -708,7 +708,8 @@ def GetConstFromRegression2(ThreshR, filteringXmax, NmuNorm):
 	particle = df['particle']
 	sin2theta = np.sin(np.arccos(costheta))**2
 	zenith_bins = np.linspace(0.0, 0.9, 10)
-	energy_bins = np.linspace(7.0, 9.0, 21)
+	# energy_bins = np.linspace(7.0, 9.0, 21)
+	energy_bins = np.linspace(10**7, 10**9.0, 21)
 	particle_bins = ['proton', 'helium', 'oxygen', 'iron']
 
 	# remove showers in sin2_0.9 bin
@@ -763,9 +764,9 @@ def GetConstFromRegression2(ThreshR, filteringXmax, NmuNorm):
 
 			Nmu_pred  = Pred_Nmu(alpha, beta, delta, gamma, A, b, Edep, Erad, dXmax)
 
-			mask_Nmu_pred = (Nmu_pred < 10) & (Nmu_pred > 0)
-			Nmu_pred = Nmu_pred[mask_Nmu_pred]
-			Nmu_ground = Nmu_ground[mask_Nmu_pred]
+			# mask_Nmu_pred = (Nmu_pred < 10) & (Nmu_pred > 0)
+			# Nmu_pred = Nmu_pred[mask_Nmu_pred]
+			# Nmu_ground = Nmu_ground[mask_Nmu_pred]
 
 			R2 = r2_score(Nmu_ground, Nmu_pred)
 
@@ -820,6 +821,7 @@ def GetConstFromRegression2(ThreshR, filteringXmax, NmuNorm):
 							'energy': energy_bins[lgE_idx],
 							'Nmu_true': np.mean(Nmu_ground),
 							'Nmu_pred': np.mean(Nmu_pred),
+							'SD_Nmu_true': np.std(Nmu_ground),
 							'bias': bias,
 							'reso': reso}
 				Nmu_list.append(Nmu_all)

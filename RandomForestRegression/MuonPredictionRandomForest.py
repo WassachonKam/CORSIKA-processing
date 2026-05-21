@@ -25,14 +25,25 @@ def load_data_as_df (p, e, sin2theta, threshR, Xmaxfiltering, NmuNorm):
     fileXmax = np.loadtxt(fXmax)
 
     # determine parameters
-    energy = np.log10(fileEdep["primaryE"]) # logE, E is primary particle energy in GeV
+    # log10 version
+    # energy = np.log10(fileEdep["primaryE"]) # logE, E is primary particle energy in GeV
+    # Xmax  = fileXmax[:,6] # Xmax 
+    # Nep_Xmax  = np.log10(fileXmax[:,5]) # number of total +-e at Xmax
+    # Ne_ground = np.log10(fileMuon['nEP']) # number of total +-mu at ground
+    # Nmu_ground = np.log10(fileMuon['nMu']) # number of total +-mu at ground
+    # zenith = fileMuon['zenith'] # zenith angle in rad
+    # Edep = np.log10(fileEdep["Edep_tot"])
+    # RadE = np.log10(fileRadE['radE_filtered(eV)'])
+    # alpha = fileRadE['alpha']
+
+    energy = fileEdep["primaryE"] # logE, E is primary particle energy in GeV
     Xmax  = fileXmax[:,6] # Xmax 
-    Nep_Xmax  = np.log10(fileXmax[:,5]) # number of total +-e at Xmax
-    Ne_ground = np.log10(fileMuon['nEP']) # number of total +-mu at ground
-    Nmu_ground = np.log10(fileMuon['nMu']) # number of total +-mu at ground
+    Nep_Xmax  = fileXmax[:,5] # number of total +-e at Xmax
+    Ne_ground = fileMuon['nEP'] # number of total +-mu at ground
+    Nmu_ground = fileMuon['nMu'] # number of total +-mu at ground
     zenith = fileMuon['zenith'] # zenith angle in rad
-    Edep = np.log10(fileEdep["Edep_tot"])
-    RadE = np.log10(fileRadE['radE_filtered(eV)'])
+    Edep = fileEdep["Edep_tot"]
+    RadE = fileRadE['radE_filtered(eV)']
     alpha = fileRadE['alpha']
 
     sinalpha = np.sin(alpha)
