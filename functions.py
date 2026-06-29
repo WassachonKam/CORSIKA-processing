@@ -552,7 +552,7 @@ def GetConstFromRegression(ThreshR, filteringXmax, NmuNorm):
 	particle = df['particle']
 	sin2theta = np.sin(np.arccos(costheta))**2
 	zenith_bins = np.linspace(0.0, 0.9, 10)
-	energy_bins = np.linspace(7.0, 9.0, 21)
+	energy_bins = np.logspace(7.0, 9.0, 21)
 	particle_bins = ['proton', 'helium', 'oxygen', 'iron']
 
 	# remove showers in sin2_0.9 bin
@@ -708,8 +708,7 @@ def GetConstFromRegression2(ThreshR, filteringXmax, NmuNorm):
 	particle = df['particle']
 	sin2theta = np.sin(np.arccos(costheta))**2
 	zenith_bins = np.linspace(0.0, 0.9, 10)
-	# energy_bins = np.linspace(7.0, 9.0, 21)
-	energy_bins = np.linspace(10**7, 10**9.0, 21)
+	energy_bins = np.logspace(7.0, 9.0, 21)
 	particle_bins = ['proton', 'helium', 'oxygen', 'iron']
 
 	# remove showers in sin2_0.9 bin
@@ -812,6 +811,9 @@ def GetConstFromRegression2(ThreshR, filteringXmax, NmuNorm):
 				Nmu_pred = Pred_Nmu(alpha, beta, delta
 				, gamma , A, b , Edep, Erad, dXmax)
 				
+				Nmu_ground = np.log10(Nmu_ground)
+				Nmu_pred = np.log10(Nmu_pred)
+				
 				residual = Nmu_ground - Nmu_pred
 				bias = np.mean(residual)
 				reso = np.std(residual)
@@ -819,8 +821,8 @@ def GetConstFromRegression2(ThreshR, filteringXmax, NmuNorm):
 				Nmu_all = {'particle': particle_bin, 
 							'sin2theta': zenith_bins[sin2_index],
 							'energy': energy_bins[lgE_idx],
-							'Nmu_true': np.mean(Nmu_ground),
-							'Nmu_pred': np.mean(Nmu_pred),
+							'Nmu_true': np.mean(Nmu_ground), #log10(Nmu_true)
+							'Nmu_pred': np.mean(Nmu_pred), #log10(Nmu_pred)
 							'SD_Nmu_true': np.std(Nmu_ground),
 							'bias': bias,
 							'reso': reso}
@@ -2028,3 +2030,97 @@ def pltSpecificBinFit(sin2_bin, lgE_bin_GeV, particle,filteringXmax,ThreshR,NmuN
 	ax2.legend()
 	ax3.legend()
 	# ax4.legend()
+
+#%% plot the resulution og the reconstruction by regression across the primary energies
+def plt_recon_res (df_Nmu, filteringXmax, ThreshR, sin2):
+	energy_bins = np.logspace(7.0, 9.0, 21)
+	sin2theta = df_Nmu['sin2theta']
+	energy = df_Nmu['energy']
+	particle = df_Nmu['particle']
+
+	fig, ax = plt.subplots(figsize=(8,5), constrained_layout=True)
+	fig2, ax2 = plt.subplots(figsize=(8,5), constrained_layout=True)
+	fig3, ax3 = plt.subplots(figsize =(8,5), constrained_layout = True)
+
+	handle_bias = []
+	handle_res = []
+	handle_true = []
+	handle_recon = []
+	colors = {'proton': 'red',
+				'helium': 'gold',
+				'oxygen': 'green',
+				'iron': 'blue'}
+	particle_bins = ['proton', 'helium', 'oxygen', 'iron']
+
+	titlelabel =  f'removing underground Xmax = {filteringXmax}, R > {ThreshR} m'
+	zenith_label = rf'$\mathrm{{sin^2 \theta = {sin2}}}$'
+	x_label = rf'$\mathrm{{log}}(E_0 \mathrm{{(eV)}})$'
+
+
+	for p_idx, p in enumerate(particle_bins):
+
+		Nmu_true_all = []
+		Nmu_pred_all = []
+		SD_Nmu_true_all = []
+		bias_all = []
+		reso_all = []
+		energy_all = []
+
+		for e_idx, e in enumerate(energy_bins):
+
+			mask = np.isclose(sin2theta, sin2) & (energy == e) & (particle == p)
+			df_mask = df_Nmu[mask]
+			Nmu_true = df_mask['Nmu_true'].values
+			Nmu_pred = df_mask['Nmu_pred'].values
+			SD_Nmu_true = df_mask['SD_Nmu_true'].values
+			bias = df_mask['bias'].values
+			reso = df_mask['reso'].values
+			
+			if not df_mask.empty:
+				Nmu_true_all.append(Nmu_true)
+				Nmu_pred_all.append(Nmu_pred)
+				SD_Nmu_true_all.append(SD_Nmu_true)
+				bias_all.append(bias)
+				reso_all.append(reso)
+				energy_all.append(e)
+				
+		energy_all = np.log10(energy_all) + 9
+		bias = ax.scatter(energy_all, bias_all, color = colors[p], marker = 'x', label = p )
+		res = ax.scatter(energy_all, reso_all, color = colors[p], marker = '^', label = p)
+		
+		true = ax2.scatter(energy_all, Nmu_true_all, color = colors[p], marker = 'x', label = p, s = 50, zorder = 2)
+		recon = ax2.scatter(energy_all, Nmu_pred_all, color = colors[p], marker = 'o', label = p, s = 20, zorder = 3,
+						edgecolors = 'black', linewidths=0.5, alpha = 0.7)
+
+		SD_true = ax3.scatter(energy_all, SD_Nmu_true_all,color = colors[p], marker = 'o', label = p)
+
+		handle_res.append(res)
+		handle_bias.append(bias)
+		handle_true.append(true)
+		handle_recon.append(recon)
+
+	fig.suptitle(titlelabel + '\n' + zenith_label)
+	leg1 = ax.legend(bbox_to_anchor=(1.01, 1), handles= handle_res, loc='upper left', title="Resolution")
+	ax.add_artist(leg1) 
+	ax.legend(bbox_to_anchor=(1.01, 0.6), handles=handle_bias, loc='upper left', title="Bias")
+	ax.set_xlabel(x_label)
+	ax.set_ylabel(rf'$\mathrm{{log(N_{{\mu^{{\pm}}}}^{{true}}) - log(N_{{\mu^{{\pm}}}}^{{recon}})}}$')
+	ax.set_title(f'')
+	ax.set_ylim(-0.23,0.23)
+	ax.hlines(y= 0, xmin = min(energy_all), xmax= max(energy_all), colors = 'k', linestyles =  '--')
+	ax.minorticks_on()
+
+	fig2.suptitle(titlelabel + '\n' + zenith_label)
+	leg2 = ax2.legend(bbox_to_anchor=(1.01, 1), handles= handle_true, loc='upper left', title="True Value")
+	ax2.add_artist(leg2) 
+	ax2.legend(bbox_to_anchor=(1.01, 0.6), handles=handle_recon, loc='upper left', title="Reconstructed Value")
+	ax2.set_xlabel(x_label)
+	ax2.set_ylabel(rf'$\mathrm{{log(N_{{\mu^{{\pm}}}})}}$')
+	ax2.minorticks_on()
+
+	fig3.suptitle(titlelabel + '\n' + zenith_label)
+	ax3.legend()
+	ax3.set_xlabel(x_label)
+	ax3.set_ylim(0,0.15)
+	ax3.set_ylabel(rf'$\mathrm{{\sigma_{{log(N_{{\mu}}^{{true}})}}}}$')
+	ax3.minorticks_on()

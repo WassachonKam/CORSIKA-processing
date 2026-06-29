@@ -42,8 +42,8 @@ def load_data_as_df (p, e, sin2theta, threshR, Xmaxfiltering, NmuNorm):
     Ne_ground = fileMuon['nEP'] # number of total +-mu at ground
     Nmu_ground = fileMuon['nMu'] # number of total +-mu at ground
     zenith = fileMuon['zenith'] # zenith angle in rad
-    Edep = fileEdep["Edep_tot"]
-    RadE = fileRadE['radE_filtered(eV)']
+    Edep = fileEdep["Edep_tot"]/1000 # Edep in GeV
+    RadE = fileRadE['radE_filtered(eV)']/1e9 #Erad in GeV
     alpha = fileRadE['alpha']
 
     sinalpha = np.sin(alpha)
@@ -73,7 +73,7 @@ def load_data_as_df (p, e, sin2theta, threshR, Xmaxfiltering, NmuNorm):
     return df
 
 
-threshR = 200
+threshR = 0
 Xmaxfiltering = False
 NmuNorm = False
 
