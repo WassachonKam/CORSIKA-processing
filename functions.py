@@ -200,7 +200,7 @@ def RegressionFixedEnergyBin(ThreshR, filteringXmax, energy_all, lgE_GeV_bin, Nm
 	particle = df['particle']
 	sin2theta = np.sin(np.arccos(costheta))**2
 	zenith_bins = np.linspace(0.0, 0.9, 10)
-	energy_bins = np.linspace(7.0, 9.0, 21)
+	energy_bins = np.logspace(7.0, 9.0, 21)
 	zenith_indices = np.digitize(sin2theta, zenith_bins)
 	energy_indices = np.digitize(energy, energy_bins)
 
@@ -209,7 +209,7 @@ def RegressionFixedEnergyBin(ThreshR, filteringXmax, energy_all, lgE_GeV_bin, Nm
 	particle_bins = ['proton', 'helium', 'oxygen', 'iron']
 
 	colors = ['red','gold', 'green', 'blue']
-	lgE_bin = lgE_GeV_bin - 9
+	lgE_bin = 10**(lgE_GeV_bin - 9)
 
 	cols, rows = 1, 7
 	fig_ax, axes = plt.subplots(rows, cols, figsize=(7, 2 * rows), constrained_layout=True, sharex= True)
@@ -282,11 +282,13 @@ def RegressionFixedEnergyBin(ThreshR, filteringXmax, energy_all, lgE_GeV_bin, Nm
 
 			Nmu_pred  = Pred_Nmu(alpha, beta, delta, gamma, A, b, Edep, Erad, dXmax)
 
-			mask_Nmu_pred = (Nmu_pred < 10) & (Nmu_pred > 0)
-			Nmu_pred = Nmu_pred[mask_Nmu_pred]
-			Nmu_ground = Nmu_ground[mask_Nmu_pred]
+			Nmu_ground = np.log10(Nmu_ground)
+			Nmu_pred = np.log10(Nmu_pred)
 
-			#print(Nmu_ground, Nmu_pred)
+			# mask_Nmu_pred = (Nmu_pred < 10) & (Nmu_pred > 0)
+			# Nmu_pred = Nmu_pred[mask_Nmu_pred]
+			# Nmu_ground = Nmu_ground[mask_Nmu_pred]
+
 			R2 = r2_score(Nmu_ground, Nmu_pred)
 			
 			residual = Nmu_pred - Nmu_ground
@@ -374,7 +376,7 @@ def RegressionFixedZenithBin(ThreshR, filteringXmax, zenith_all, sin2_bin, NmuNo
 	particle = df['particle']
 	sin2theta = np.sin(np.arccos(costheta))**2
 	zenith_bins = np.linspace(0.0, 0.9, 10)
-	energy_bins = np.linspace(7.0, 9.0, 21)
+	energy_bins = np.logspace(7.0, 9.0, 21)
 
 	# remove showers in sin2_0.9 bin
 	zenith_bins = zenith_bins[:-1]
@@ -462,9 +464,12 @@ def RegressionFixedZenithBin(ThreshR, filteringXmax, zenith_all, sin2_bin, NmuNo
 
 			Nmu_pred  = Pred_Nmu(alpha, beta, delta, gamma, A, b, Edep, Erad, dXmax)
 
-			mask_Nmu_pred = (Nmu_pred < 10) & (Nmu_pred > 0)
-			Nmu_pred = Nmu_pred[mask_Nmu_pred]
-			Nmu_ground = Nmu_ground[mask_Nmu_pred]
+			Nmu_ground = np.log10(Nmu_ground)
+			Nmu_pred = np.log10(Nmu_pred)
+
+			# mask_Nmu_pred = (Nmu_pred < 10) & (Nmu_pred > 0)
+			# Nmu_pred = Nmu_pred[mask_Nmu_pred]
+			# Nmu_ground = Nmu_ground[mask_Nmu_pred]
 
 			R2 = r2_score(Nmu_ground, Nmu_pred)
 
@@ -621,9 +626,10 @@ def GetConstFromRegression(ThreshR, filteringXmax, NmuNorm):
 
 				Nmu_pred  = Pred_Nmu(alpha, beta, delta, gamma, A, b, Edep, Erad, dXmax)
 
-				mask_Nmu_pred = (Nmu_pred < 10) & (Nmu_pred > 0)
-				Nmu_pred = Nmu_pred[mask_Nmu_pred]
-				Nmu_ground = Nmu_ground[mask_Nmu_pred]
+
+				# mask_Nmu_pred = (Nmu_pred < 10) & (Nmu_pred > 0)
+				# Nmu_pred = Nmu_pred[mask_Nmu_pred]
+				# Nmu_ground = Nmu_ground[mask_Nmu_pred]
 
 				R2 = r2_score(Nmu_ground, Nmu_pred)
 
@@ -858,12 +864,16 @@ def const_interp(df_params, primEnergy, sin2, Edep, Erad,Xmax, plotting, printin
 					'R2':[]}
 
 	for i, const in enumerate(const_list):
-		points = df_params[['sin2theta', 'energy']].values
+		
+		df_params['log_energy'] = np.log10(df_params['energy'])
+		points = df_params[['sin2theta', 'log_energy']].values
 		values = df_params[const].values
 
 		# create grid space
-		yi = np.linspace(7.0, 9, 1000)    #  energy_bin range  
+		yi = np.logspace(7.0, 9, 1000)    #  energy_bin range  
 		xi = np.linspace(0, 0.8, 1000)    #  sin2_theta range
+
+		yi = np.log10(yi)
 		X, Y = np.meshgrid(xi, yi)	
 
 		# interpolate grid space
