@@ -21,8 +21,7 @@ mumass = 0.105658 #muon mass in GeV/c^2
 emass = 5.11e-4 #electron mass in GeV/c^2
 
 ############################# DATA PREPARATION #############################
-
-maskR  = False
+# maskR  = False
 minR   = 0
 parser = argparse.ArgumentParser()
 parser.add_argument("-p", "--particle", type=str, help="Primary particle type")
@@ -124,18 +123,18 @@ for run in range(runmin, runmax+1):
     weight_e = weight[idx_electron]
 
     # masking Ek and weight R > 200 m 
-    if maskR == True:
-        mask_mu = (R_mu > minR*10**3) # unit in cm
-        mask_epm = (R_epm > minR*10**3) # unit in cm 
-        mask_e = (R_e > minR*10**3) # unit in cm 
+    # if maskR == True:
+    mask_mu = (R_mu > minR*10**3) # unit in cm
+    mask_epm = (R_epm > minR*10**3) # unit in cm 
+    mask_e = (R_e > minR*10**3) # unit in cm 
 
-        Ek_mu = Ek_mu[mask_mu]
-        Ek_epm = Ek_epm[mask_epm]
-        Ek_e = Ek_e[mask_e]
+    Ek_mu = Ek_mu[mask_mu]
+    Ek_epm = Ek_epm[mask_epm]
+    Ek_e = Ek_e[mask_e]
 
-        weight_mu = weight_mu[mask_mu]
-        weight_epm = weight_epm[mask_epm]
-        weight_e = weight_e[mask_e]
+    weight_mu = weight_mu[mask_mu]
+    weight_epm = weight_epm[mask_epm]
+    weight_e = weight_e[mask_e]
 
     # zenith angle for normalization
     theta = np.deg2rad(thetap)
@@ -170,7 +169,7 @@ for run in range(runmin, runmax+1):
 
         if i == 0: all_data["Edep_e"].append(total_Edep) 
         elif i == 1: all_data["Edep_mu"].append(total_Edep)
-    
+
     all_data["Edep_tot"].append(total_Edep_all)
     
 output_dir = f"/data/user/wkammeem/CORSIKA/TotalEdepScint/{minR}m"
@@ -180,5 +179,6 @@ if not os.path.exists(output_dir):
 output_path = f"{output_dir}/{primary}_{energy}_{sin2theta}.npz"
 np.savez_compressed(output_path, **all_data)
 print(f"Saved files to {output_path}")
+
 
         

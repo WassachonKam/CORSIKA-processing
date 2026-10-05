@@ -15,6 +15,8 @@ from matplotlib.backends.backend_pdf import PdfPages
 from sklearn.metrics import mean_squared_error, r2_score
 from scipy.optimize import curve_fit
 from scipy.interpolate import griddata
+from mpl_toolkits.mplot3d.art3d import Line3DCollection
+import textwrap
 
 #%% parameter setting
 #=====================================
@@ -725,6 +727,7 @@ def GetConstFromRegression2(ThreshR, filteringXmax, NmuNorm):
 
 	params_list = []
 	Nmu_list = []
+	Nmu_list_events = []
 
 
 	for lgE_idx in range(len(energy_bins)):
@@ -834,9 +837,21 @@ def GetConstFromRegression2(ThreshR, filteringXmax, NmuNorm):
 							'reso': reso}
 				Nmu_list.append(Nmu_all)
 
+				for j in range(len(df_mask)):
+					Nmu_all_events = {
+						'particle': particle_bin,
+						'sin2theta': zenith_bins[sin2_index],
+						'energy': energy_bins[lgE_idx],
+						'Nmu_true': Nmu_ground.iloc[j],
+						'Nmu_pred': Nmu_pred.iloc[j],
+						'residual': residual.iloc[j],
+					}
+					Nmu_list_events.append(Nmu_all_events)
+
 	df_params = pd.DataFrame(params_list)
 	df_Nmu = pd.DataFrame(Nmu_list)
-	return df_params, df_Nmu
+	df_Nmu_all_events = pd.DataFrame(Nmu_list_events)
+	return df_params, df_Nmu, df_Nmu_all_events
 
 # constant interpolation
 # df_params is from GetConstFromRegression 
@@ -1877,7 +1892,7 @@ def pltEdepEprim(primary, threshR):
 			plt.close(fig)
 
 
-def pltSpecificBinFit(sin2_bin, lgE_bin_GeV, particle,filteringXmax,ThreshR,NmuNorm,dataforregression):
+def pltSpecificBinFit1(sin2_bin, lgE_bin_GeV, particle,filteringXmax,ThreshR,NmuNorm,dataforregression):
 	df = pd.read_parquet(f'RandomForestRegression/data_for_regression_{ThreshR}_Xmax_{filteringXmax}_NmuNorm_{NmuNorm}.parquet')
 	lgE_bin = lgE_bin_GeV - 9
 	colors = {'proton': 'red',
@@ -1908,7 +1923,7 @@ def pltSpecificBinFit(sin2_bin, lgE_bin_GeV, particle,filteringXmax,ThreshR,NmuN
 	ax3.zaxis.set_rotate_label(False)
 	# fig4, (ax4) = plt.subplots(figsize= figsize ,dpi = 150, sharey = True)
 
-	str_Erad = rf'$\mathrm{{E_{{rad}}}}$ (GeV)/ $\sin^2\alpha$'
+	str_Erad = rf'Normalized $\mathrm{{E_{{rad}}}}$ (GeV)'
 	str_Ne_Xmax = rf'$\mathrm{{N_{{e,Xmax}}}}$'
 	str_Xmax = rf'$\mathrm{{X_{{max}} (g/cm^2)}} $'
 	str_dXmax = rf'$\mathrm{{dX_{{max}} (g/cm^2)}}$'
@@ -1992,7 +2007,7 @@ def pltSpecificBinFit(sin2_bin, lgE_bin_GeV, particle,filteringXmax,ThreshR,NmuN
 		rmse2 = np.sqrt(np.sum(res2**2) / dof2)
 
 		res3 = Edep - linearEdep(X_Nmu_Ne, *popt)
-		dof3 = len(X_Nmu_Ne*2) - len(popt)
+		dof3 = len(Edep) - len(popt)
 		rmse3 = np.sqrt(np.sum(res3**2) / dof3)
 
 
@@ -2000,22 +2015,25 @@ def pltSpecificBinFit(sin2_bin, lgE_bin_GeV, particle,filteringXmax,ThreshR,NmuN
 		x1 = np.linspace(min(Ne), max(Ne), num = len(Ne))
 		x2 = np.linspace(min(dXmax), max(dXmax), num = len(dXmax))
 
-		ax1.errorbar(Ne, RadE, yerr=rmse, fmt='o', color = colors[p], label = p, zorder = 2, elinewidth=1, ms = s/5)
-		ax1.plot(x1, linearErad_NeXmax(x1, *popt2), color = 'k', zorder = 3)
-		# ax1.set_title(f'{p} {e} sin2_{sin2theta} all data')
+		ax1.errorbar(Ne, RadE, yerr=rmse, fmt='o', color = colors[p], zorder = 2, elinewidth=1, ms = s/5)
+		ax1.scatter(Ne, RadE, color = colors[p], label = p, s = s)
+		# ax1.plot(x1, linearErad_NeXmax(x1, *popt2), color = 'k', zorder = 3) # regression line
+		# ax1.set_title(f'{p} {e} sin2_{sin2theta} all data') 
 		ax1.set_title(f'lgE_{lgE_bin_GeV} sin2_{sin2_bin}')
 		# ax1.text(min(Ne), max(RadE)*0.9, rf'$E_{{rad}} = \gamma N_{{e,Xmax}} + b$' +'\n' + rf'$\gamma$ = {gamma:.2e}' +'\n' + rf'b = {b:.2e}')
 		ax1.set_ylabel(str_Erad)
 		ax1.set_xlabel(str_Ne_Xmax)
 
-		ax2.errorbar(dXmax, Ne_ground_per_Xmax, yerr=rmse2, fmt='o', color = colors[p], label = p, zorder = 2, elinewidth=1, ms = s/5)
+		ax2.errorbar(dXmax, Ne_ground_per_Xmax, yerr=rmse2, fmt='o', color = colors[p], zorder = 2, elinewidth=1, ms = s/5)
+		ax2.scatter(dXmax, Ne_ground_per_Xmax, color = colors[p], label = p, s = s)
 		# ax2.text(400, max(Ne_ground_per_Xmax)*0.9, rf'$N_{{e,ground}}/N_{{e,Xmax}} = A* e^{{-dXmax/ \delta}}$' +'\n' + rf'$\delta$ = {delta:.2e}' +'\n' + rf'A = {A:.2e}')
-		ax2.plot(x2, ExpoNeRatio(x2, *popt3), color = 'k', zorder = 3)
+		# ax2.plot(x2, ExpoNeRatio(x2, *popt3), color = 'k', zorder = 3) # regression line
 		ax2.set_title(f'lgE_{lgE_bin_GeV} sin2_{sin2_bin}')
 		ax2.set_ylabel(str_Ne_ratio)
 		ax2.set_xlabel(str_dXmax)
 
-		ax3.errorbar(Nmu_ground, Ne_ground, Edep, zerr=rmse3, fmt='o', color = colors[p], ms = s/5, label = p)
+		ax3.errorbar(Nmu_ground, Ne_ground, Edep, zerr=rmse3, fmt='o', color = colors[p], ms = s/5, alpha = 0.2)
+		ax3.scatter(Nmu_ground, Ne_ground, Edep, color = colors[p], label = p, s = s)
 		ax3.set_title(f'lgE_{lgE_bin_GeV} sin2_{sin2_bin}')
 		# ax3.text(min(Ne_ground), max(Nmu_ground)*0.9, rf'$E_{{dep}} = \alpha N_e + \beta N_{{\mu}}$' +'\n' + rf'$\alpha$ = {alpha:.2e}' +'\n' + rf'$\beta$ = {beta:.2e}')
 		ax3.set_xlabel(str_Nmu_ground)
@@ -2103,18 +2121,23 @@ def plt_recon_res (df_Nmu, filteringXmax, ThreshR, sin2):
 						edgecolors = 'black', linewidths=0.5, alpha = 0.7)
 
 		SD_true = ax3.scatter(energy_all, SD_Nmu_true_all,color = colors[p], marker = 'o', label = p)
+		# variance = [x ** 2 for x in reso_all]
+		reso_avg = np.sqrt(np.mean(np.square(reso_all)))
 
 		handle_res.append(res)
 		handle_bias.append(bias)
 		handle_true.append(true)
 		handle_recon.append(recon)
 
+		# print(p, np.mean(bias_all), np.sqrt(np.sum(variance))/len(reso_all))
+		print(p, np.mean(bias_all), reso_avg)
+
 	fig.suptitle(titlelabel + '\n' + zenith_label)
 	leg1 = ax.legend(bbox_to_anchor=(1.01, 1), handles= handle_res, loc='upper left', title="Resolution")
 	ax.add_artist(leg1) 
 	ax.legend(bbox_to_anchor=(1.01, 0.6), handles=handle_bias, loc='upper left', title="Bias")
 	ax.set_xlabel(x_label)
-	ax.set_ylabel(rf'$\mathrm{{log(N_{{\mu^{{\pm}}}}^{{true}}) - log(N_{{\mu^{{\pm}}}}^{{recon}})}}$')
+	ax.set_ylabel(rf'$\mathrm{{log}}(N_{{\mu^{{\pm}}}}^{{true}}) - \mathrm{{log}}(N_{{\mu^{{\pm}}}}^{{recon}})$')
 	ax.set_title(f'')
 	ax.set_ylim(-0.23,0.23)
 	ax.hlines(y= 0, xmin = min(energy_all), xmax= max(energy_all), colors = 'k', linestyles =  '--')
@@ -2125,7 +2148,7 @@ def plt_recon_res (df_Nmu, filteringXmax, ThreshR, sin2):
 	ax2.add_artist(leg2) 
 	ax2.legend(bbox_to_anchor=(1.01, 0.6), handles=handle_recon, loc='upper left', title="Reconstructed Value")
 	ax2.set_xlabel(x_label)
-	ax2.set_ylabel(rf'$\mathrm{{log(N_{{\mu^{{\pm}}}})}}$')
+	ax2.set_ylabel(rf'$\mathrm{{log}}(N_{{\mu^{{\pm}}}})$')
 	ax2.minorticks_on()
 
 	fig3.suptitle(titlelabel + '\n' + zenith_label)
@@ -2134,3 +2157,493 @@ def plt_recon_res (df_Nmu, filteringXmax, ThreshR, sin2):
 	ax3.set_ylim(0,0.15)
 	ax3.set_ylabel(rf'$\mathrm{{\sigma_{{log(N_{{\mu}}^{{true}})}}}}$')
 	ax3.minorticks_on()
+
+
+
+
+#%% main plot
+
+# ---------------------------------------------------------------- style tokens
+SURF = '#fcfcfb'      # chart surface
+INK = '#0b0b0b'       # primary text
+INK2 = '#52514e'      # secondary text (ticks)
+MUTED = '#8a8983'     # annotations
+GRID = '#e8e7e3'      # gridlines
+CONTEXT = '#d8d7d2'   # the other primaries, recessive
+ACCENT = '#2a78d6'    # this panel's primary
+BAND = '#9ec5f4'      # +/-1 RMSE ribbon
+FITLINE = '#104281'   # fit curve
+WARM = '#e34948'      # diverging warm pole (residual below the fit)
+
+# Conventional mass-group colours. Each is used as ONE panel's accent against the
+# grey context, never against the other three, so they are identity labels rather
+# than a palette that has to self-separate.
+PRIMARY_COLORS = {
+	'proton': '#ff0000',   # red
+	'helium': '#ffd700',   # gold
+	'oxygen': '#008000',   # green
+	'iron':   '#0000ff',   # blue
+}
+
+
+def _shade(c, amt):
+	"""Blend a hex colour toward white (amt > 0) or black (amt < 0)."""
+	c = c.lstrip('#')
+	rgb = [int(c[i:i + 2], 16) for i in (0, 2, 4)]
+	t = 255 if amt > 0 else 0
+	f = abs(amt)
+	return '#%02x%02x%02x' % tuple(round(v + (t - v) * f) for v in rgb)
+
+
+BASE_FONT = 9.0   # every other size in the figure is a multiple of this
+
+
+def _vizstyle(scale=1.0):
+	"""rcParams for a recessive, print-safe scientific figure.
+
+	`scale` multiplies every text size at once. The helpers below read their
+	sizes back out of rcParams rather than hard-coding numbers, so one scale
+	moves titles, labels, ticks and annotations together.
+	"""
+	b = BASE_FONT * scale
+	return {
+		'figure.facecolor': SURF, 'axes.facecolor': SURF, 'savefig.facecolor': SURF,
+		'font.size': b, 'axes.titlesize': b * 10 / 9, 'axes.labelsize': b,
+		'figure.titlesize': b * 12 / 9,
+		'axes.edgecolor': '#c9c8c3', 'axes.linewidth': 0.8,
+		'xtick.color': INK2, 'ytick.color': INK2, 'text.color': INK,
+		'xtick.labelsize': b * 8 / 9, 'ytick.labelsize': b * 8 / 9,
+		'legend.frameon': False, 'figure.dpi': 500,
+	}
+
+
+def _fs(k=1.0):
+	"""A size relative to the current base font."""
+	return plt.rcParams['font.size'] * k
+
+
+def _pow10(arr):
+	"""Exponent to divide out so the axis carries no corner offset box."""
+	m = np.nanmax(np.abs(np.asarray(arr, dtype=float)))
+	if not np.isfinite(m) or m == 0:
+		return 0
+	e = int(np.floor(np.log10(m)))
+	return e if abs(e) >= 3 else 0
+
+
+def _label(base, e):
+	return base if e == 0 else rf'{base}  ($10^{{{e}}}$)'
+
+
+def _subtitle(fig, text, y, width=96):
+	"""Place the subtitle, wrapped, and record how much vertical room it took.
+
+	Naming the pooled fit takes more characters than a one-line subtitle can
+	hold at this figure width, so wrap rather than let it run off the canvas.
+	"""
+	# bigger type fits fewer characters per line and eats more vertical room,
+	# so both the wrap width and the reserved height track the font size
+	k = plt.rcParams['font.size'] / BASE_FONT
+	lines = textwrap.wrap(text, width=max(24, int(width / k))) or ['']
+	fig.text(0.5, y, '\n'.join(lines), ha='center', va='top', fontsize=_fs(),
+	         color=MUTED, linespacing=1.4)
+	fig._viz_top = y - 0.022 * k * len(lines)   # read back for tight_layout's rect
+	return fig._viz_top
+
+
+def _sub(what, scope, rmse, params, alt='dashed grey = that primary’s own fit'):
+	"""Subtitle naming which fit is drawn -- a pooled fit must say so, or a
+	reader assumes each panel was fitted on its own points."""
+	if scope == 'per-primary':
+		return f'{what} fit per primary; band is ' + u'±' + '1 RMSE about that fit'
+	tail = '' if rmse is None else f'; band is ±1 RMSE = {rmse:.4g}'
+	head = f'one {what} fit to all primaries pooled ({params}){tail}'
+	if scope == 'both':
+		head += f'; {alt}'
+	return head
+
+
+def _res_rmse(res, npar):
+	"""RMSE with the dof taken from the residual array.
+
+	Never from the input container: len() on an (Ne, Nmu) tuple returns 2 and
+	inflates the result by sqrt(N/2) without raising.
+	"""
+	return np.sqrt(np.sum(res ** 2) / (res.size - npar))
+
+
+def _facets(n, title, subtitle, figsize=(8.2, 6.6)):
+	"""2-column grid of shared-scale panels with a title block."""
+	nrow = int(np.ceil(n / 2))
+	fig, axes = plt.subplots(nrow, 2, figsize=figsize, sharex=True, sharey=True,
+	                         squeeze=False)
+	# mathtext in the title is taller than its font size -- keep the two lines
+	# well apart or the subscripts collide with the subtitle.
+	fig.suptitle(title, fontsize=plt.rcParams['figure.titlesize'], y=0.985, va='top')
+	_subtitle(fig, subtitle, 0.923)
+	for ax in axes.flat:
+		ax.grid(True, color=GRID, lw=0.7, zorder=0)
+		ax.set_axisbelow(True)
+		for side in ('top', 'right'):
+			ax.spines[side].set_visible(False)
+	for ax in axes.flat[n:]:          # blank any unused cell
+		ax.set_visible(False)
+	return fig, axes
+
+
+def _facets3d(n, title, subtitle, figsize=(10.5, 9.0), elev=20, azim=-58):
+	"""2-column grid of 3-D panels, styled to match the 2-D facets."""
+	nrow = int(np.ceil(n / 2))
+	fig = plt.figure(figsize=figsize)
+	fig.suptitle(title, fontsize=plt.rcParams['figure.titlesize'], y=0.985, va='top')
+	_subtitle(fig, subtitle, 0.945, width=104)
+	axes = []
+	for i in range(n):
+		ax = fig.add_subplot(nrow, 2, i + 1, projection='3d')
+		ax.view_init(elev=elev, azim=azim)
+		ax.set_box_aspect(None, zoom=0.94)
+		ax.zaxis.set_rotate_label(False)   # keep the z label upright
+		# default 3-D panes are a heavy grey box; lighten them to the 2-D tokens
+		for axis in (ax.xaxis, ax.yaxis, ax.zaxis):
+			axis.set_pane_color((1.0, 1.0, 1.0, 0.0))
+			axis.pane.set_edgecolor(GRID)
+			axis._axinfo['grid'].update(color=GRID, linewidth=0.6)
+			axis.line.set_color('#c9c8c3')
+		ax.tick_params(labelsize=plt.rcParams['xtick.labelsize'], pad=1.5)
+		axes.append(ax)
+	fig.subplots_adjust(left=0.01, right=0.99, bottom=0.01, top=fig._viz_top,
+	                    wspace=0.0, hspace=0.0)
+	return fig, axes
+
+
+def _note(ax, text, corner='lower right'):
+	"""Fit parameters, on a surface-coloured plate so data never shows through."""
+	va, ha = corner.split()
+	ax.text(0.97 if ha == 'right' else 0.03, 0.05 if va == 'lower' else 0.95,
+	        text, transform=ax.transAxes, ha=ha, va='bottom' if va == 'lower' else 'top',
+	        fontsize=_fs(8 / 9), color=MUTED, linespacing=1.5, zorder=6,
+	        bbox=dict(facecolor=SURF, edgecolor='none', alpha=0.78, pad=2.5))
+
+
+def _panel(ax, x, y, ctx_x, ctx_y, model, popt, rmse, name, note,
+           corner='lower right', alt_popt=None, accent=ACCENT):
+	"""One primary in accent, the rest as grey context, fit + RMSE ribbon.
+
+	`popt` is the fit the ribbon belongs to. `alt_popt`, when given, is drawn as
+	a thin dashed line for comparison -- the per-primary fit next to the pooled
+	one, so any mass dependence shows as a divergence between the two.
+	"""
+	ax.scatter(ctx_x, ctx_y, s=9, color=CONTEXT, lw=0, zorder=1, rasterized=True)
+
+	# band and fit line are shades of the panel's own colour, so the three marks
+	# read as one series. gold needs the darkening most -- at 1.4:1 on white an
+	# undarkened fit line is invisible.
+	band, fitline = _shade(accent, 0.62), _shade(accent, -0.45)
+
+	# fit drawn only across the range this primary actually covers
+	xf = np.linspace(np.min(x), np.max(x), 200)
+	yf = model(xf, *popt)
+	ax.fill_between(xf, yf - rmse, yf + rmse, color=band, alpha=0.5, lw=0, zorder=2)
+	ax.plot(xf, yf, color=fitline, lw=2, zorder=4)
+	if alt_popt is not None:
+		# neutral, not WARM -- red is proton's identity colour here
+		ax.plot(xf, model(xf, *alt_popt), color=INK2, lw=1.3, ls=(0, (4, 2)),
+		        zorder=5)
+
+	ax.scatter(x, y, s=14, color=accent, lw=0.4, edgecolor=_shade(accent, -0.35),
+	           zorder=3, rasterized=True)
+
+	ax.set_title(name, loc='left', fontweight='bold', color=INK, pad=6)
+	_note(ax, note, corner)
+
+
+# ------------------------------------------------------------------- the plot
+def pltSpecificBinFit(sin2_bin, lgE_bin_GeV, particle, filteringXmax, ThreshR,
+                      NmuNorm, dataforregression, show_3d=False,
+                      fit_scope='per-primary', colors=None, font_scale=1.0,
+                      figsize=None, figsize3d=None):
+	"""fit_scope: 'per-primary' fits each primary separately (the original
+	behaviour); 'global' fits one relation to all primaries pooled and draws
+	that in every panel; 'both' draws the pooled fit solid with the primary's
+	own fit dashed over it.
+
+	colors: {primary: hex} overriding PRIMARY_COLORS for the panel accents.
+	font_scale: multiplies every text size (1.3 is a good poster/slide value).
+	figsize / figsize3d: enlarge the canvas if bigger type starts to crowd."""
+	colors = dict(PRIMARY_COLORS, **(colors or {}))
+	df = pd.read_parquet(
+		f'RandomForestRegression/data_for_regression_{ThreshR}_Xmax_{filteringXmax}_NmuNorm_{NmuNorm}.parquet')
+	lgE_bin = lgE_bin_GeV - 9
+	costheta_all = df['costheta']
+	energy = df['energy']
+	particle_all = df['particle']
+	sin2theta = np.sin(np.arccos(costheta_all)) ** 2
+	zenith_bins = np.linspace(0.0, 0.9, 10)
+	energy_bins = np.linspace(7.0, 9.0, 21)
+	zenith_indices = np.digitize(sin2theta, zenith_bins)
+	energy_indices = np.digitize(energy, energy_bins)
+
+	X0 = 697.6
+
+	# ---------------------------------------------------------------- pass 1
+	# load, mask and fit every primary first, so each panel can draw the others
+	# as context and so the fits are available before any axes exist.
+	D = {}
+	for p in particle:
+		fXmax = fp_Xmax(p, f'lgE_{lgE_bin_GeV}', str(sin2_bin))
+		fRadE = fp_RadE_norm2(p, f'lgE_{lgE_bin_GeV}', str(sin2_bin))
+		fEdep = f'TotalEdepScint/{ThreshR}m/{p}_lgE_{lgE_bin_GeV}_{sin2_bin}.npz'
+
+		fileXmax = np.loadtxt(fXmax)
+		fileground = np.load(fp_groundTot(p, f'lgE_{lgE_bin_GeV}', str(sin2_bin)),
+		                     allow_pickle=True)
+		fileRadE = np.load(fRadE, allow_pickle=True)
+		fileEdep = np.load(fEdep)
+
+		if dataforregression:
+			Ne = 10 ** (df['Ne'])
+			Xmax = df['Xmax']
+			Ne_ground = 10 ** (df['Ne_ground'])
+			Nmu_ground = 10 ** (df['Nmu'])
+			RadE = 10 ** (df['Erad'])
+			Edep = 10 ** (df['Edep'])
+			costheta = df['costheta']
+
+			sin2_index = np.digitize([sin2_bin], zenith_bins)[0]
+			lgE_index = np.digitize([lgE_bin], energy_bins)[0]
+			combined_mask = ((particle_all == p) & (zenith_indices == sin2_index)
+			                 & (energy_indices == lgE_index))
+		else:
+			Ne = fileXmax[:, 5]
+			Xmax = fileXmax[:, 6]
+			Ne_ground = fileground['nEP']
+			Nmu_ground = fileground['nMu']
+			RadE = fileRadE['radE_filtered(eV)']
+			Edep = fileEdep['Edep_tot']
+			costheta = np.cos(fileground['zenith'])
+			combined_mask = (Xmax <= X0 / costheta) & (Xmax >= 0)
+
+		# np.asarray keeps the two branches (numpy / pandas) interchangeable
+		# downstream -- curve_fit and the plotting helpers both want arrays.
+		sel = lambda a: np.asarray(a)[np.asarray(combined_mask)]
+		Ne, Xmax, Ne_ground = sel(Ne), sel(Xmax), sel(Ne_ground)
+		Nmu_ground, RadE, Edep, costheta = sel(Nmu_ground), sel(RadE), sel(Edep), sel(costheta)
+
+		dXmax = X0 / costheta - Xmax
+		Ne_ground_per_Xmax = Ne_ground / Ne
+
+		# ---- fits
+		X_Nmu_Ne = (Ne_ground, Nmu_ground)
+		popt, _ = curve_fit(linearEdep, X_Nmu_Ne, Edep)
+		popt2, _ = curve_fit(linearErad_NeXmax, Ne, RadE)
+		popt3, _ = curve_fit(ExpoNeRatio, dXmax, Ne_ground_per_Xmax, p0=[250, 1])
+		alpha, beta = popt
+		gamma, b = popt2
+		delta, A = popt3
+
+		rmse = _res_rmse(RadE - linearErad_NeXmax(Ne, *popt2), len(popt2))
+		rmse2 = _res_rmse(Ne_ground_per_Xmax - ExpoNeRatio(dXmax, *popt3), len(popt3))
+		rmse3 = _res_rmse(Edep - linearEdep(X_Nmu_Ne, *popt), len(popt))
+
+		print(f'{p:>7}  alpha = {alpha:.4f}, beta = {beta:.4f}, '
+		      f'gamma = {gamma:.2e}, b = {b:.2e}, delta = {delta:.2e}')
+
+		D[p] = dict(Ne=Ne, RadE=RadE, dXmax=dXmax, ratio=Ne_ground_per_Xmax,
+		            Ne_ground=Ne_ground, Nmu_ground=Nmu_ground, Edep=Edep,
+		            popt=popt, popt2=popt2, popt3=popt3,
+		            rmse=rmse, rmse2=rmse2, rmse3=rmse3,
+		            alpha=alpha, beta=beta, gamma=gamma, b=b, delta=delta, A=A)
+
+	cat = lambda k: np.concatenate([D[p][k] for p in particle])
+	bin_str = rf'lgE {lgE_bin_GeV},  $\sin^2\theta$ = {sin2_bin}'
+
+	# ------------------------------------------------- pooled ("global") fits
+	# One relation fitted to every primary at once. Comparing a primary's
+	# scatter about THIS fit with its scatter about its own fit is the test of
+	# whether the relation is mass-independent.
+	G = {}
+	G['popt'], _ = curve_fit(linearEdep, (cat('Ne_ground'), cat('Nmu_ground')),
+	                         cat('Edep'))
+	G['popt2'], _ = curve_fit(linearErad_NeXmax, cat('Ne'), cat('RadE'))
+	G['popt3'], _ = curve_fit(ExpoNeRatio, cat('dXmax'), cat('ratio'), p0=[250, 1])
+	G['rmse'] = _res_rmse(cat('RadE') - linearErad_NeXmax(cat('Ne'), *G['popt2']),
+	                      len(G['popt2']))
+	G['rmse2'] = _res_rmse(cat('ratio') - ExpoNeRatio(cat('dXmax'), *G['popt3']),
+	                       len(G['popt3']))
+	G['rmse3'] = _res_rmse(
+		cat('Edep') - linearEdep((cat('Ne_ground'), cat('Nmu_ground')), *G['popt']),
+		len(G['popt']))
+	G['gamma'], G['b'] = G['popt2']
+	G['delta'], G['A'] = G['popt3']
+	G['alpha'], G['beta'] = G['popt']
+
+	# Per-primary residuals ABOUT THE POOLED FIT. The mean is the interesting
+	# number: a non-zero bias is exactly the mass dependence the pooled fit
+	# cannot absorb, and it is invisible when every primary gets its own fit.
+	for p in particle:
+		d = D[p]
+		d['bias'] = np.mean(d['RadE'] - linearErad_NeXmax(d['Ne'], *G['popt2']))
+		d['bias2'] = np.mean(d['ratio'] - ExpoNeRatio(d['dXmax'], *G['popt3']))
+		d['bias3'] = np.mean(d['Edep']
+		                     - linearEdep((d['Ne_ground'], d['Nmu_ground']), *G['popt']))
+		d['grmse'] = _res_rmse(d['RadE'] - linearErad_NeXmax(d['Ne'], *G['popt2']), 0)
+		d['grmse2'] = _res_rmse(d['ratio'] - ExpoNeRatio(d['dXmax'], *G['popt3']), 0)
+		d['grmse3'] = _res_rmse(
+			d['Edep'] - linearEdep((d['Ne_ground'], d['Nmu_ground']), *G['popt']), 0)
+
+	if fit_scope not in ('per-primary', 'global', 'both'):
+		raise ValueError("fit_scope must be 'per-primary', 'global' or 'both'")
+	glob = fit_scope in ('global', 'both')
+	F = G if glob else None          # which fit the ribbon belongs to
+	print(f'  pooled  alpha = {G["alpha"]:.4f}, beta = {G["beta"]:.4f}, '
+	      f'gamma = {G["gamma"]:.2e}, b = {G["b"]:.2e}, delta = {G["delta"]:.2e}')
+
+	str_Erad = r'Normalized $\mathrm{E_{rad}}$ (GeV)'
+	str_Ne_Xmax = r'$\mathrm{N_{e,Xmax}}$'
+	str_dXmax = r'$\mathrm{dX_{max}}$ (g/cm$^2$)'
+	str_Ne_ratio = r'$\mathrm{N_{e,ground} / N_{e,Xmax}}$'
+	str_Ne_ground = r'$\mathrm{N_{e, ground}}$'
+	str_Nmu_ground = r'$\mathrm{N_{\mu, ground}}$'
+
+	figs = {}
+	with plt.rc_context(_vizstyle(font_scale)):
+		# ------------------------------------------------ fig1: Erad vs Ne,Xmax
+		ex, ey = _pow10(cat('Ne')), _pow10(cat('RadE'))
+		sx, sy = 10.0 ** ex, 10.0 ** ey
+		fig1, axes = _facets(len(particle),
+		                     rf'Normalized $E_{{rad}}$ vs $N_{{e,Xmax}}$    {bin_str}',
+		                     _sub('linear', fit_scope, G['rmse'] / sy,
+		                          rf'$\gamma$ = {G["gamma"]:.2e}, b = {G["b"]:.2e}'),
+		                     **({'figsize': figsize} if figsize else {}))
+		for ax, p in zip(axes.flat, particle):
+			d = D[p]
+			# if glob:
+			# 	note = (f'offset = {d["bias"] / sy:+.3f}' + '\n'
+			# 	        + f'RMSE = {d["grmse"] / sy:.3f}   n = {d["Ne"].size}'
+			# 	        + '\n' + rf'(own fit: $\gamma$ = {d["gamma"]:.2e})')
+			# else:
+			# 	note = (rf'$\gamma$ = {d["gamma"]:.2e}' + '\n' + rf'b = {d["b"]:.2e}'
+			# 	        + '\n' + f'RMSE = {d["rmse"] / sy:.3f}   n = {d["Ne"].size}')
+			note = None
+			_panel(ax, d['Ne'] / sx, d['RadE'] / sy, cat('Ne') / sx, cat('RadE') / sy,
+			       lambda t, *q: linearErad_NeXmax(t * sx, *q) / sy,
+			       (F or d)['popt2'], (F or d)['rmse'] / sy, p, note,
+			       alt_popt=d['popt2'] if fit_scope == 'both' else None,
+			       accent=colors[p])
+		fig1.supxlabel(_label(str_Ne_Xmax, ex), fontsize=_fs())
+		fig1.supylabel(_label(str_Erad, ey), fontsize=_fs())
+		fig1.tight_layout(rect=[0, 0, 1, fig1._viz_top])
+		figs['erad'] = fig1
+
+		# ------------------------------------------- fig2: Ne ratio vs dXmax
+		fig2, axes = _facets(len(particle),
+		                     rf'$N_{{e,ground}}/N_{{e,Xmax}}$ vs $dX_{{max}}$    {bin_str}',
+		                     _sub(r'$A\,e^{-dX_{max}/\delta}$', fit_scope, G['rmse2'],
+		                          rf'$\delta$ = {G["delta"]:.2e}, A = {G["A"]:.2e}'))
+		for ax, p in zip(axes.flat, particle):
+			d = D[p]
+			# if glob:
+			# 	note = (f'offset = {d["bias2"]:+.4f}' + '\n'
+			# 	        + f'RMSE = {d["grmse2"]:.4f}   n = {d["dXmax"].size}'
+			# 	        + '\n' + rf'(own fit: $\delta$ = {d["delta"]:.2e})')
+			# else:
+			# 	note = (rf'$\delta$ = {d["delta"]:.2e}' + '\n' + rf'A = {d["A"]:.2e}'
+			# 	        + '\n' + f'RMSE = {d["rmse2"]:.4f}   n = {d["dXmax"].size}')
+			note = None
+			_panel(ax, d['dXmax'], d['ratio'], cat('dXmax'), cat('ratio'),
+			       ExpoNeRatio, (F or d)['popt3'], (F or d)['rmse2'], p, note,
+			       corner='upper right',
+			       alt_popt=d['popt3'] if fit_scope == 'both' else None,
+			       accent=colors[p])
+		fig2.supxlabel(str_dXmax, fontsize=_fs())
+		fig2.supylabel(str_Ne_ratio, fontsize=_fs())
+		fig2.tight_layout(rect=[0, 0, 1, fig2._viz_top])
+		figs['ratio'] = fig2
+
+		# ------------------------ fig3: Edep vs (Ne, Nmu) -- 3-D, same style as 1/2
+		# One panel per primary on shared limits: this primary in its own colour,
+		# every other primary behind it in grey. The fit is reported numerically
+		# in the corner rather than drawn -- a 2-variable linear fit is a plane,
+		# and the plane is what fills the cube and hides the points.
+		ex3, ey3, ez3 = _pow10(cat('Ne_ground')), _pow10(cat('Nmu_ground')), _pow10(cat('Edep'))
+		sx3, sy3, sz3 = 10.0 ** ex3, 10.0 ** ey3, 10.0 ** ez3
+		# The plane is no longer drawn, so the pooled parameters have nowhere to
+		# live but the subtitle -- the panel notes carry each primary's own.
+		sub3 = 'one primary per panel in colour, the others in grey; '
+		if glob:
+			sub3 += (rf'pooled fit: $\alpha$ = {G["alpha"]:.3e}, '
+			         rf'$\beta$ = {G["beta"]:.3e}, '
+			         rf'RMSE = {G["rmse3"] / sz3:.3f}')
+		else:
+			sub3 += ('each panel fitted on its own points; '
+			         rf'all primaries pooled would give $\alpha$ = {G["alpha"]:.3e}, '
+			         rf'$\beta$ = {G["beta"]:.3e}')
+		fig3, axes3 = _facets3d(
+			len(particle),
+			rf'$E_{{dep}} = \alpha N_e + \beta N_\mu$    {bin_str}', sub3,
+			**({'figsize': figsize3d} if figsize3d else {}))
+
+		xlim = np.array([cat('Ne_ground').min(), cat('Ne_ground').max()]) / sx3
+		ylim = np.array([cat('Nmu_ground').min(), cat('Nmu_ground').max()]) / sy3
+		zlim = np.array([cat('Edep').min(), cat('Edep').max()]) / sz3
+
+		for ax, p in zip(axes3, particle):
+			d = D[p]
+			x, y = d['Ne_ground'] / sx3, d['Nmu_ground'] / sy3
+			z = d['Edep'] / sz3
+
+			# context: the OTHER primaries only. In 2-D the accent points are drawn
+			# over the context, but 3-D sorts by depth, so including this primary's
+			# own points in the grey layer would let grey land on top of colour.
+			other = [q for q in particle if q != p]
+			if other:
+				ax.scatter(np.concatenate([D[q]['Ne_ground'] for q in other]) / sx3,
+				           np.concatenate([D[q]['Nmu_ground'] for q in other]) / sy3,
+				           np.concatenate([D[q]['Edep'] for q in other]) / sz3,
+				           s=7, color=CONTEXT, lw=0, depthshade=False, rasterized=True)
+
+			ax.scatter(x, y, z, s=13, color=colors[p], lw=0.3,
+			           edgecolor=_shade(colors[p], -0.35), depthshade=False,
+			           rasterized=True)
+
+			ax.set_xlim(*xlim); ax.set_ylim(*ylim); ax.set_zlim(*zlim)
+			kpad = plt.rcParams['font.size'] / BASE_FONT
+			ax.set_xlabel(_label(str_Ne_ground, ex3), labelpad=14 * kpad)
+			ax.set_ylabel(_label(str_Nmu_ground, ey3), labelpad=14 * kpad)
+			ax.set_zlabel(_label('Edep (GeV)', ez3), labelpad=10 * kpad, rotation=90)
+			# a 3-D axes' title sits far above the cube; place it in figure space
+			ax.text2D(0.02, 0.97, p, transform=ax.transAxes, ha='left', va='top',
+			          fontweight='bold', color=INK,
+			          fontsize=plt.rcParams['axes.titlesize'])
+			# alpha is O(1e-3) here -- fixed-point rounds every primary to 0.001
+			# if glob:
+			# 	txt = (f'offset = {d["bias3"] / sz3:+.3f}' + '\n'
+			# 	       + f'RMSE = {d["grmse3"] / sz3:.3f}   n = {z.size}' + '\n'
+			# 	       + rf'(own fit: $\alpha$ = {d["alpha"]:.2e}, $\beta$ = {d["beta"]:.2e})')
+			# else:
+			# 	txt = (rf'$\alpha$ = {d["alpha"]:.2e}   $\beta$ = {d["beta"]:.2e}'
+			# 	       + '\n' + f'RMSE = {d["rmse3"] / sz3:.3f}   n = {z.size}')
+			# ax.text2D(0.02, 0.90, txt, transform=ax.transAxes, ha='left', va='top',
+			#           fontsize=_fs(8 / 9), color=MUTED, linespacing=1.5)
+		figs['edep'] = fig3
+
+		# ------------------------------------------- optional: the 3-D scatter
+		if show_3d:
+			fig4 = plt.figure(figsize=(8, 8))
+			ax4 = fig4.add_subplot(projection='3d')
+			ax4.set_box_aspect(None, zoom=0.88)
+			ax4.zaxis.set_rotate_label(False)
+			shades = ['#86b6ef', '#3987e5', '#256abf', '#104281']  # ordinal by mass
+			for p, c in zip(particle, shades):
+				d = D[p]
+				ax4.scatter(d['Nmu_ground'], d['Ne_ground'], d['Edep'],
+				            color=c, s=14, lw=0.3, edgecolor=SURF, label=p,
+				            depthshade=False)
+			ax4.set_title(bin_str)
+			ax4.set_xlabel(str_Nmu_ground)
+			ax4.set_ylabel(str_Ne_ground)
+			ax4.set_zlabel('Edep (GeV)', labelpad=10, rotation=90)
+			ax4.legend(loc='upper left')
+			figs['edep3d'] = fig4
+
+	return figs
