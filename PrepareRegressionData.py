@@ -35,9 +35,9 @@ def load_data_as_df (p, e, sin2theta, threshR, Xmaxfiltering):
     Ne_ground = fileMuon['nEP'] # number of total +-mu at ground
     Nmu_ground = fileMuon['nMu'] # number of total +-mu at ground
     zenith = fileMuon['zenith'] # zenith angle in rad
-    Edep = fileEdep["Edep_tot"]/1000 # Edep in GeV
+    Edep = fileEdep["Edep_tot"] # Nscint number of total scintillation photons
     RadE = fileRadE['radE_filtered(eV)']/1e9 #Erad in GeV
-    alpha = fileRadE['alpha']
+    alpha = fileRadE['alpha'] # angle between shower and magntic field
 
     sinalpha = np.sin(alpha)
     costheta = np.cos(zenith)
@@ -52,15 +52,15 @@ def load_data_as_df (p, e, sin2theta, threshR, Xmaxfiltering):
     # store all parameters in data frame
     df = pd.DataFrame({
         'particle': p,                          # primary particle
-        'energy': energy[mask],                 # plog(E) primary energy
-        'costheta': costheta[mask],             # sin2(zenith)
+        'energy': energy[mask],                 # primary energy
+        'costheta': costheta[mask],             # cos(zenith)
         'Xmax': Xmax[mask],                     # Xmax
-        'sinalpha': sinalpha[mask],             # cos(alpha), alpha = angle between shower and magntic field
-        'Edep': Edep[mask],                     # log10(Edep) deposited energy
-        'Erad': RadE[mask],                     # log10(Erad)radiation energy
-        'Nmu': Nmu_ground[mask],                # log10(Nmu) number of muon at ground
-        'Ne' : Nep_Xmax[mask],                  # log10(Ne+-) number of electron and positron at Xmax
-        'Ne_ground': Ne_ground[mask]            # log10(Ne+-) number of electron and positron at ground    
+        'sinalpha': sinalpha[mask],             # sin(alpha), alpha = angle between shower and magntic field
+        'Edep': Edep[mask],                     # number of total scintillation photons
+        'Erad': RadE[mask],                     # radiation energy in eV
+        'Nmu': Nmu_ground[mask],                # number of muon at ground
+        'Ne' : Nep_Xmax[mask],                  # number of electron and positron at Xmax
+        'Ne_ground': Ne_ground[mask]            # number of electron and positron at ground    
     })
     
     return df
@@ -85,7 +85,7 @@ final_df = pd.concat(all_df, ignore_index=True)
 final_df.replace([np.inf, -np.inf], np.nan, inplace=True) #replace inf values with nan
 final_df.dropna(inplace=True) # remove all nans
 # final_df.to_parquet(f'data_for_regression_{threshR}_Xmax_{Xmaxfiltering}_NmuNorm_{NmuNorm}.parquet', index=False)
-final_df.to_parquet(f'data_for_regression_{threshR}_Xmax_{Xmaxfiltering}.parquet', index=False)
+final_df.to_parquet(f'DataForRegression/data_for_regression_{threshR}_Xmax_{Xmaxfiltering}.parquet', index=False)
 print(final_df.head())
 print(f"Total rows (events): {len(final_df)}/168,000")
 print('file is saved')

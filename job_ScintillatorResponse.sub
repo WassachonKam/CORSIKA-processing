@@ -1,4 +1,4 @@
-executable = /data/user/wkammeem/CORSIKA/submit_ScintillatorResponse.py
+executable = /data/user/wkammeem/CORSIKA/job_run_ScintillatorResponse.sh
 arguments = --particle $(p) --energy $(e) --zenith $(z) 
 
 transfer_input_files    = /data/user/wkammeem/CORSIKA/ScintillatorResponse

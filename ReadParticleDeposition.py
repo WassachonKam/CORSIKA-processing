@@ -172,6 +172,7 @@ all_data = {
 
 file_path = (f'/data/sim/IceCubeUpgrade/CosmicRay/Radio/coreas/data/continuous/star-pattern/{primary_par}/lgE_{lgE}/sin2_{sin2theta}/{run:06d}/DAT{run:06d}')
 file_input = (f"/data/sim/IceCubeUpgrade/CosmicRay/Radio/coreas/data/continuous/star-pattern/{primary_par}/lgE_{lgE}/sin2_{sin2theta}/{run:06d}/SIM{run:06d}.inp")
+
 try:
     with open(file_input) as f:
         for line in f:
@@ -257,7 +258,7 @@ for particle in particles:
     q_frames_no_edep = 0
 
     mctree = 'IceTopMCTree'
-    energy = 'IceScintHitSeriesMap'
+    energy_key = 'IceScintHitSeriesMap'
 
     Edep_all = []
     Ek_all = []
@@ -278,8 +279,8 @@ for particle in particles:
                 total_q_frames += 1
                 n_total_file   += 1
 
-                if energy in f:
-                    energy_scint = f[energy]
+                if energy_key in f:
+                    energy_scint = f[energy_key]
                     if len(energy_scint) == 0:
                         q_frames_no_edep += 1
                         # Zero-dep: just count, no MCTree needed
