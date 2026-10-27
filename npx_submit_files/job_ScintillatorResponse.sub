@@ -1,4 +1,4 @@
-executable = /data/user/wkammeem/CORSIKA/job_run_ScintillatorResponse.sh
+executable = /data/user/wkammeem/CORSIKA/npx_submit_files/job_run_ScintillatorResponse.sh
 arguments = --particle $(p) --energy $(e) --zenith $(z) 
 
 transfer_input_files    = /data/user/wkammeem/CORSIKA/ScintillatorResponse
@@ -14,5 +14,8 @@ request_cpus = 1
 request_memory = 6GB 
 request_disk = 2GB
 #request_gpus = 1
-queue p, e, z from params_all.txt
+queue p, e, z from ../parameter_config/params_sin_2_3.txt
 
+#queue p, e, z from (
+#    proton, lgE_17.9, 0.4
+#)

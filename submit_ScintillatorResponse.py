@@ -71,35 +71,35 @@ class ScintillatorResponse:
 
         return float(result[0]) if scalar else result
 
-def compute_interaction_probability(log_ekin_all, edep_all, bin_width=0.1):
-    """
-    log_ekin_all : log10(E_kin/GeV) for ALL simulated gammas (including non-interacting)
-    edep_all     : E_dep/MeV for all gammas (0 for non-interacting)
-    bin_width    : bin width in log10(E_kin) — Stef says 0.1
-    """
-    ekin_min = np.floor(log_ekin_all.min() / bin_width) * bin_width
-    ekin_max = np.ceil(log_ekin_all.max()  / bin_width) * bin_width
-    edges = np.arange(ekin_min, ekin_max + bin_width, bin_width)
-    centers = 0.5 * (edges[:-1] + edges[1:])
+# def compute_interaction_probability(log_ekin_all, edep_all, bin_width=0.1):
+#     """
+#     log_ekin_all : log10(E_kin/GeV) for ALL simulated gammas (including non-interacting)
+#     edep_all     : E_dep/MeV for all gammas (0 for non-interacting)
+#     bin_width    : bin width in log10(E_kin) — Stef says 0.1
+#     """
+#     ekin_min = np.floor(log_ekin_all.min() / bin_width) * bin_width
+#     ekin_max = np.ceil(log_ekin_all.max()  / bin_width) * bin_width
+#     edges = np.arange(ekin_min, ekin_max + bin_width, bin_width)
+#     centers = 0.5 * (edges[:-1] + edges[1:])
 
-    p_interact = np.zeros(len(centers))
-    p_err      = np.zeros(len(centers))
+#     p_interact = np.zeros(len(centers))
+#     p_err      = np.zeros(len(centers))
 
-    for i in range(len(centers)):
-        mask = (log_ekin_all >= edges[i]) & (log_ekin_all < edges[i + 1])
-        n_total    = mask.sum()
-        n_interact = (edep_all[mask] > 0).sum()
+#     for i in range(len(centers)):
+#         mask = (log_ekin_all >= edges[i]) & (log_ekin_all < edges[i + 1])
+#         n_total    = mask.sum()
+#         n_interact = (edep_all[mask] > 0).sum()
 
-        if n_total > 0:
-            p = n_interact / n_total
-            p_interact[i] = p
-            p_err[i] = np.sqrt(p * (1 - p) / n_total)  # binomial uncertainty
+#         if n_total > 0:
+#             p = n_interact / n_total
+#             p_interact[i] = p
+#             p_err[i] = np.sqrt(p * (1 - p) / n_total)  # binomial uncertainty
 
-    return centers, p_interact, p_err
+#     return centers, p_interact, p_err
 
 
 ############################# DATA PREPARATION #############################
-minR   = 0
+minR   = 200
 parser = argparse.ArgumentParser()
 parser.add_argument("-p", "--particle", type=str, help="Primary particle type")
 parser.add_argument("-e", "--energy", type=str, help="Energy of primary particle ex. lgE_16.0")
@@ -122,13 +122,6 @@ all_data = {
 
         }
 
-# download digitized data from Agnieszka's thesis
-dfe = pd.read_csv('ScintillatorResponse/electron_0.0.csv')
-dmu = pd.read_csv('ScintillatorResponse/muon_0.0.csv')
-digitized_files = [dfe, dmu]
-plt_title = [rf'$e^{{-}}$', rf'$\mu^{{\pm}}$']
-savefile = ['electron', 'muon']
-
 
 runmin, runmax = 0, 199
 
@@ -148,17 +141,17 @@ for run in range(runmin, runmax+1):
     except FileNotFoundError:
         for key in all_data.keys():
             all_data[key].append(np.nan)
-            continue
+        continue
 
     try:
         with CorsikaParticleFile(file_path, thinning= True) as file:
             # we only have one event per file, we can grab it like this
             event = next(file)
 
-    except (OSError, IOError, StopIteration, IndexError, ValueError) as err:
+    except (OSError, IOError, StopIteration, IndexError, ValueError, Exception) as err:
         for key in all_data.keys():
             all_data[key].append(np.nan)
-            continue
+        continue
 
 
     all_data["primaryE"].append(primE)
@@ -279,6 +272,7 @@ for run in range(runmin, runmax+1):
         log_edep  = np.log10(E_dep_MeV) / np.cos(theta)
 
         if particle == 'gamma':
+
             erange_centers    = np.array(erange_centers)
             erange_p_interact = np.array(erange_p_interact)
             erange_p_err      = np.array(erange_p_err)
@@ -286,7 +280,20 @@ for run in range(runmin, runmax+1):
             p_interact_func = interp1d(erange_centers, erange_p_interact, kind='linear',
                                     bounds_error=False,
                                     fill_value=(erange_p_interact[0], erange_p_interact[-1]))
-            p_interact_arg = p_interact_func
+            # # full interpolation prob
+            # p_interact_arg = p_interact_func
+
+            # # const prob
+            # p_interact_arg = 0.3
+
+            # half const prob
+            LOG_EKIN_CUT     = -1.5   # log10(E/GeV) threshold
+            P_INTERACT_CONST = 0.3    # constant p_interact above the threshold
+
+            def p_interact_arg(x):
+                x = np.asarray(x, dtype=float)
+                return np.where(x > LOG_EKIN_CUT, P_INTERACT_CONST, p_interact_func(x))
+     
 
         else:
             p_interact_arg = p_interact  # 1.0 for charged particles
@@ -314,7 +321,7 @@ output_dir = f"/data/user/wkammeem/CORSIKA/TotalEdepScint/{minR}m"
 if not os.path.exists(output_dir):
     os.makedirs(output_dir)
 
-output_path = f"{output_dir}/{primary}_{energy}_{sin2theta}.npz"
+output_path = f"{output_dir}/{primary}_{energy}_{sin2theta}_halfconstgammaP.npz"
 np.savez_compressed(output_path, **all_data)
 print(f"Saved files to {output_path}")
 

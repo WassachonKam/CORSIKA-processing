@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import joblib
 
 
-threshR = 250 # minimum radius in meters
+threshR = 200 # minimum radius in meters
 Xmaxfiltering = True # apply Xmax underground removal
 NmuNorm = False # apply Nmu normalization
 
@@ -17,10 +17,10 @@ NmuNorm = False # apply Nmu normalization
 def load_data_as_df (p, e, sin2theta, threshR, Xmaxfiltering):
 
     # file path
-    fMuon = f'../GroundTotalParticles/{p}_{e}_{sin2theta}.npz'
-    fXmax = f'../Xmax/{p}_{e}_sin2_{sin2theta}.dat'
-    fRadE = f'../radEnergy/norm_sintheta2/{p}_{e}_{sin2theta}.npz'
-    fEdep = f'../TotalEdepScint/{threshR}m/{p}_{e}_{sin2theta}.npz'
+    fMuon = f'GroundTotalParticles/{p}_{e}_{sin2theta}.npz'
+    fXmax = f'Xmax/{p}_{e}_sin2_{sin2theta}.dat'
+    fRadE = f'radEnergy/norm_sintheta2/{p}_{e}_{sin2theta}.npz'
+    fEdep = f'TotalEdepScint/{threshR}m/{p}_{e}_{sin2theta}.npz'
     
     # load data
     fileRadE = np.load(fRadE, allow_pickle=True)
@@ -62,6 +62,8 @@ def load_data_as_df (p, e, sin2theta, threshR, Xmaxfiltering):
         'Ne' : Nep_Xmax[mask],                  # number of electron and positron at Xmax
         'Ne_ground': Ne_ground[mask]            # number of electron and positron at ground    
     })
+    # print(p, e, z, len(energy), len(mask), {k: len(v) for k, v in locals().items() if hasattr(v, '__len__') and not isinstance(v, str)})
+
     
     return df
 
@@ -86,6 +88,6 @@ final_df.replace([np.inf, -np.inf], np.nan, inplace=True) #replace inf values wi
 final_df.dropna(inplace=True) # remove all nans
 # final_df.to_parquet(f'data_for_regression_{threshR}_Xmax_{Xmaxfiltering}_NmuNorm_{NmuNorm}.parquet', index=False)
 final_df.to_parquet(f'DataForRegression/data_for_regression_{threshR}_Xmax_{Xmaxfiltering}.parquet', index=False)
-print(final_df.head())
+# print(final_df.head())
 print(f"Total rows (events): {len(final_df)}/168,000")
 print('file is saved')

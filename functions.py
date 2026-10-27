@@ -707,8 +707,8 @@ def GetConstFromRegression(ThreshR, filteringXmax, NmuNorm):
 	return df_params, df_Nmu
 
 # fitting and return constant array by fitting all data across primaries
-def GetConstFromRegression2(ThreshR, filteringXmax, NmuNorm):
-	df = pd.read_parquet(f'RandomForestRegression/data_for_regression_{ThreshR}_Xmax_{filteringXmax}_NmuNorm_{NmuNorm}.parquet')
+def GetConstFromRegression2(ThreshR, filteringXmax):
+	df = pd.read_parquet(f'DataForRegression/data_for_regression_{ThreshR}_Xmax_{filteringXmax}_constgammaP.parquet')
 
 	# binning energy and zenith angle 
 	costheta = df['costheta']
@@ -1892,8 +1892,8 @@ def pltEdepEprim(primary, threshR):
 			plt.close(fig)
 
 
-def pltSpecificBinFit1(sin2_bin, lgE_bin_GeV, particle,filteringXmax,ThreshR,NmuNorm,dataforregression):
-	df = pd.read_parquet(f'RandomForestRegression/data_for_regression_{ThreshR}_Xmax_{filteringXmax}_NmuNorm_{NmuNorm}.parquet')
+def pltSpecificBinFit1(sin2_bin, lgE_bin_GeV, particle,filteringXmax,ThreshR,dataforregression):
+	df = pd.read_parquet(f'DataForRegression/data_for_regression_{ThreshR}_Xmax_{filteringXmax}.parquet')
 	lgE_bin = lgE_bin_GeV - 9
 	colors = {'proton': 'red',
 			'helium': 'gold',
@@ -2060,7 +2060,7 @@ def pltSpecificBinFit1(sin2_bin, lgE_bin_GeV, particle,filteringXmax,ThreshR,Nmu
 	# ax4.legend()
 
 #%% plot the resulution og the reconstruction by regression across the primary energies
-def plt_recon_res (df_Nmu, filteringXmax, ThreshR, sin2):
+def plt_recon_res (df_Nmu, filteringXmax, ThreshR, sin2, savefig = False):
 	energy_bins = np.logspace(7.0, 9.0, 21)
 	sin2theta = df_Nmu['sin2theta']
 	energy = df_Nmu['energy']
@@ -2074,6 +2074,10 @@ def plt_recon_res (df_Nmu, filteringXmax, ThreshR, sin2):
 	handle_res = []
 	handle_true = []
 	handle_recon = []
+	handle_SD_true = []
+	handle_SD_reco = []
+	pfe_handle = ax3.scatter([], [], color='black', marker='D', label='p–Fe separation')
+
 	colors = {'proton': 'red',
 				'helium': 'gold',
 				'oxygen': 'green',
@@ -2111,7 +2115,18 @@ def plt_recon_res (df_Nmu, filteringXmax, ThreshR, sin2):
 				bias_all.append(bias)
 				reso_all.append(reso)
 				energy_all.append(e)
-				
+
+				if p == 'proton':
+					mask_p  = np.isclose(sin2theta, sin2) & (energy == e) & (particle == 'proton')
+					mask_fe = np.isclose(sin2theta, sin2) & (energy == e) & (particle == 'iron')
+					if mask_p.any() and mask_fe.any():
+						nmu_p  = df_Nmu[mask_p]['Nmu_true'].values[0]   # scalar
+						nmu_fe = df_Nmu[mask_fe]['Nmu_true'].values[0]  # scalar
+						sep = abs(nmu_fe - nmu_p)
+						# ax3.scatter(np.log10(e) + 9, sep, color='black', marker='D', s= 30, zorder = 5)
+						
+	
+						
 		energy_all = np.log10(energy_all) + 9
 		bias = ax.scatter(energy_all, bias_all, color = colors[p], marker = 'x', label = p )
 		res = ax.scatter(energy_all, reso_all, color = colors[p], marker = '^', label = p)
@@ -2119,18 +2134,19 @@ def plt_recon_res (df_Nmu, filteringXmax, ThreshR, sin2):
 		true = ax2.scatter(energy_all, Nmu_true_all, color = colors[p], marker = 'x', label = p, s = 50, zorder = 2)
 		recon = ax2.scatter(energy_all, Nmu_pred_all, color = colors[p], marker = 'o', label = p, s = 20, zorder = 3,
 						edgecolors = 'black', linewidths=0.5, alpha = 0.7)
-
-		SD_true = ax3.scatter(energy_all, SD_Nmu_true_all,color = colors[p], marker = 'o', label = p)
-		# variance = [x ** 2 for x in reso_all]
+		
+		SD_true = ax3.scatter(energy_all, SD_Nmu_true_all,color = colors[p], marker = 'o', label = p, s = 30)
+		SD_reco = ax3.scatter(energy_all, reso_all, color = colors[p], marker = '^', label = p, s = 30)
 		reso_avg = np.sqrt(np.mean(np.square(reso_all)))
 
 		handle_res.append(res)
 		handle_bias.append(bias)
 		handle_true.append(true)
 		handle_recon.append(recon)
+		handle_SD_true.append(SD_true)
+		handle_SD_reco.append(SD_reco)
 
-		# print(p, np.mean(bias_all), np.sqrt(np.sum(variance))/len(reso_all))
-		print(p, np.mean(bias_all), reso_avg)
+		# print(p, np.mean(bias_all), reso_avg)
 
 	fig.suptitle(titlelabel + '\n' + zenith_label)
 	leg1 = ax.legend(bbox_to_anchor=(1.01, 1), handles= handle_res, loc='upper left', title="Resolution")
@@ -2151,13 +2167,25 @@ def plt_recon_res (df_Nmu, filteringXmax, ThreshR, sin2):
 	ax2.set_ylabel(rf'$\mathrm{{log}}(N_{{\mu^{{\pm}}}})$')
 	ax2.minorticks_on()
 
-	fig3.suptitle(titlelabel + '\n' + zenith_label)
-	ax3.legend()
-	ax3.set_xlabel(x_label)
-	ax3.set_ylim(0,0.15)
-	ax3.set_ylabel(rf'$\mathrm{{\sigma_{{log(N_{{\mu}}^{{true}})}}}}$')
-	ax3.minorticks_on()
 
+	
+	fig3.suptitle(titlelabel + '\n' + zenith_label)
+	# leg_pfe = ax3.legend(handles=[pfe_handle], bbox_to_anchor=(1.01, 0.1), loc='upper left')
+	# ax3.add_artist(leg_pfe)
+	leg3 = ax3.legend(bbox_to_anchor=(1.01, 1), handles=handle_SD_true, loc='upper left', title= f"log($N_{{\\mu}}^{{true}}$)")
+	ax3.add_artist(leg3)
+	ax3.legend(bbox_to_anchor=(1.01, 0.55), handles=handle_SD_reco, loc='upper left', title= f"log($N_{{\\mu}}^{{recon}}$) - log($N_{{\\mu}}^{{true}}$)")
+	ax3.set_xlabel(x_label)
+	ax3.set_ylim(0,0.18)
+	# ax3.set_ylabel(rf'$\mathrm{{\sigma_{{log(N_{{\mu}}^{{true}})}}}}$')
+	ax3.set_ylabel(rf'width ($\mathrm{{\sigma}}$) of $\mathrm{{log}}(N_{{\mu}})$')
+	ax3.minorticks_on()
+	
+
+	if savefig:
+		fig.savefig(f'figures/regression/{ThreshR}m/{sin2}_bias_reso_constgammaP.png', bbox_inches='tight', dpi=400)
+		fig2.savefig(f'figures/regression/{ThreshR}m/{sin2}_true_recon_constgammaP.png', bbox_inches='tight', dpi=400)
+		fig3.savefig(f'figures/regression/{ThreshR}m/{sin2}_width_NopFe_constgammaP.png', bbox_inches='tight', dpi=400)
 
 
 
@@ -2359,7 +2387,7 @@ def _panel(ax, x, y, ctx_x, ctx_y, model, popt, rmse, name, note,
 
 # ------------------------------------------------------------------- the plot
 def pltSpecificBinFit(sin2_bin, lgE_bin_GeV, particle, filteringXmax, ThreshR,
-                      NmuNorm, dataforregression, show_3d=False,
+                      dataforregression, show_3d=False,
                       fit_scope='per-primary', colors=None, font_scale=1.0,
                       figsize=None, figsize3d=None):
 	"""fit_scope: 'per-primary' fits each primary separately (the original
@@ -2372,7 +2400,7 @@ def pltSpecificBinFit(sin2_bin, lgE_bin_GeV, particle, filteringXmax, ThreshR,
 	figsize / figsize3d: enlarge the canvas if bigger type starts to crowd."""
 	colors = dict(PRIMARY_COLORS, **(colors or {}))
 	df = pd.read_parquet(
-		f'RandomForestRegression/data_for_regression_{ThreshR}_Xmax_{filteringXmax}_NmuNorm_{NmuNorm}.parquet')
+		f'DataForRegression/data_for_regression_{ThreshR}_Xmax_{filteringXmax}.parquet')
 	lgE_bin = lgE_bin_GeV - 9
 	costheta_all = df['costheta']
 	energy = df['energy']

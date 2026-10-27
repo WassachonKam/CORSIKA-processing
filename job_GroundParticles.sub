@@ -18,5 +18,5 @@ request_cpus = 1
 request_memory = 5GB 
 request_disk = 1GB
 #request_gpus = 1
-queue p, e, z from params_all.txt
+queue p, e, z from parameter_config/params_all.txt
 
