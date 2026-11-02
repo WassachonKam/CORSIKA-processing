@@ -71,35 +71,21 @@ class ScintillatorResponse:
 
         return float(result[0]) if scalar else result
 
-# def compute_interaction_probability(log_ekin_all, edep_all, bin_width=0.1):
-#     """
-#     log_ekin_all : log10(E_kin/GeV) for ALL simulated gammas (including non-interacting)
-#     edep_all     : E_dep/MeV for all gammas (0 for non-interacting)
-#     bin_width    : bin width in log10(E_kin) — Stef says 0.1
-#     """
-#     ekin_min = np.floor(log_ekin_all.min() / bin_width) * bin_width
-#     ekin_max = np.ceil(log_ekin_all.max()  / bin_width) * bin_width
-#     edges = np.arange(ekin_min, ekin_max + bin_width, bin_width)
-#     centers = 0.5 * (edges[:-1] + edges[1:])
-
-#     p_interact = np.zeros(len(centers))
-#     p_err      = np.zeros(len(centers))
-
-#     for i in range(len(centers)):
-#         mask = (log_ekin_all >= edges[i]) & (log_ekin_all < edges[i + 1])
-#         n_total    = mask.sum()
-#         n_interact = (edep_all[mask] > 0).sum()
-
-#         if n_total > 0:
-#             p = n_interact / n_total
-#             p_interact[i] = p
-#             p_err[i] = np.sqrt(p * (1 - p) / n_total)  # binomial uncertainty
-
-#     return centers, p_interact, p_err
 
 
 ############################# DATA PREPARATION #############################
-minR   = 200
+
+
+R_in_m  = 200                                   # inner radius [m]
+area_m2 = 100                                     # ring area [m^2]
+R_out_m = np.sqrt(R_in_m**2 + area_m2 / np.pi)    # ≈ 300.00265 m
+m_to_cm = 100.0
+R_in, R_out = R_in_m * m_to_cm, R_out_m * m_to_cm # in cm, same units as x, y
+minR = R_in                                       # minimum R in cm, used in the else branch
+
+Ring_Area = True # True: use ring area with minR inner radius, False: use total outer area 
+gamma_p = 'interpolation' # 'interpolation' or 'constant' or 'half-constant' for gamma interaction probability
+
 parser = argparse.ArgumentParser()
 parser.add_argument("-p", "--particle", type=str, help="Primary particle type")
 parser.add_argument("-e", "--energy", type=str, help="Energy of primary particle ex. lgE_16.0")
@@ -122,6 +108,11 @@ all_data = {
 
         }
 
+gamma_p_label = {
+    'constant': '_constgammaP',
+    'interpolation': '',
+    'half-constant': '_halfconstgammaP',
+}[gamma_p]
 
 runmin, runmax = 0, 199
 
@@ -178,11 +169,19 @@ for run in range(runmin, runmax+1):
 
     Ek_data, weight_data = {}, {}
 
-    for name, (pid, mass) in particles.items():
-        idx = particle_id == pid    # index which particle == particle ID
-        mask = R(x[idx], y[idx]) > minR * 1e3  # minimum R in cm
-        Ek_data[name]     = Ekin(px[idx], py[idx], pz[idx], mass)[mask]
-        weight_data[name] = weight[idx][mask]
+    if Ring_Area:
+        for name, (pid, mass) in particles.items():
+            idx = particle_id == pid
+            r = R(x[idx], y[idx])
+            mask = (r >= R_in) & (r < R_out)              # particles inside the ring
+            Ek_data[name]     = Ekin(px[idx], py[idx], pz[idx], mass)[mask]
+            weight_data[name] = weight[idx][mask]
+    else:
+        for name, (pid, mass) in particles.items():
+            idx = particle_id == pid    # index which particle == particle ID
+            mask = R(x[idx], y[idx]) > minR   # minimum R in cm
+            Ek_data[name]     = Ekin(px[idx], py[idx], pz[idx], mass)[mask]
+            weight_data[name] = weight[idx][mask]
 
     Ek_gamma, Ek_e_plus, Ek_e_min, Ek_mu_plus, Ek_mu_min = Ek_data['gamma'], Ek_data['e+'], Ek_data['e-'], Ek_data['mu+'], Ek_data['mu-']
     weight_gamma, weight_e_plus, weight_e_min, weight_mu_plus, weight_mu_min = weight_data['gamma'], weight_data['e+'], weight_data['e-'], weight_data['mu+'], weight_data['mu-']
@@ -280,20 +279,21 @@ for run in range(runmin, runmax+1):
             p_interact_func = interp1d(erange_centers, erange_p_interact, kind='linear',
                                     bounds_error=False,
                                     fill_value=(erange_p_interact[0], erange_p_interact[-1]))
-            # # full interpolation prob
-            # p_interact_arg = p_interact_func
+            
+            # full interpolation prob
+            if gamma_p == 'interpolation':
+                p_interact_arg = p_interact_func
 
-            # # const prob
-            # p_interact_arg = 0.3
+            # const prob
+            elif gamma_p == 'constant':
+                p_interact_arg = 0.03
 
-            # half const prob
-            LOG_EKIN_CUT     = -1.5   # log10(E/GeV) threshold
-            P_INTERACT_CONST = 0.3    # constant p_interact above the threshold
-
-            def p_interact_arg(x):
-                x = np.asarray(x, dtype=float)
-                return np.where(x > LOG_EKIN_CUT, P_INTERACT_CONST, p_interact_func(x))
-     
+            elif gamma_p == 'half-constant':
+                log_EKIN_CUT     = -1.5   # log10(E/GeV) threshold
+                P_INTERACT_CONST = 0.03    # constant p_interact above the threshold
+                def p_interact_arg(x):
+                    x = np.asarray(x, dtype=float)
+                    return np.where(x > log_EKIN_CUT, P_INTERACT_CONST, p_interact_func(x))
 
         else:
             p_interact_arg = p_interact  # 1.0 for charged particles
@@ -317,11 +317,15 @@ for run in range(runmin, runmax+1):
     all_data["Edep_tot"].append(total_Edep_all)
     print("run: ", run, "Total Nscint: ", total_Edep_all)
 
-output_dir = f"/data/user/wkammeem/CORSIKA/TotalEdepScint/{minR}m"
+output_dir = f"/data/user/wkammeem/CORSIKA/TotalEdepScint/{R_in_m}m"
+
+if Ring_Area:
+    output_dir = f"{output_dir}/RingArea/{area_m2}sqm"
+
 if not os.path.exists(output_dir):
     os.makedirs(output_dir)
 
-output_path = f"{output_dir}/{primary}_{energy}_{sin2theta}_halfconstgammaP.npz"
+output_path = f"{output_dir}/{primary}_{energy}_{sin2theta}{gamma_p_label}.npz"
 np.savez_compressed(output_path, **all_data)
 print(f"Saved files to {output_path}")
 

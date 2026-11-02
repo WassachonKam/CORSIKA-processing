@@ -1,26 +1,31 @@
 # import functions
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.metrics import mean_squared_error, r2_score
-from sklearn.preprocessing import LabelEncoder
-import matplotlib.pyplot as plt
-import joblib
 
 
 threshR = 200 # minimum radius in meters
 Xmaxfiltering = True # apply Xmax underground removal
 NmuNorm = False # apply Nmu normalization
+RingArea = False
+area_m2 = 20 # area of the ring in m^2
+gamma_p = 'half-constant' # 'interpolation' or 'constant' or 'half-constant' for gamma interaction probability
 
+gamma_p_label = {
+    'constant': '_constgammaP',
+    'interpolation': '',
+    'half-constant': '_halfconstgammaP',
+}[gamma_p]
 
-def load_data_as_df (p, e, sin2theta, threshR, Xmaxfiltering):
+def load_data_as_df (p, e, sin2theta, threshR, Xmaxfiltering, RingArea):
 
     # file path
     fMuon = f'GroundTotalParticles/{p}_{e}_{sin2theta}.npz'
     fXmax = f'Xmax/{p}_{e}_sin2_{sin2theta}.dat'
     fRadE = f'radEnergy/norm_sintheta2/{p}_{e}_{sin2theta}.npz'
-    fEdep = f'TotalEdepScint/{threshR}m/{p}_{e}_{sin2theta}.npz'
+    fEdep = f'TotalEdepScint/{threshR}m/{p}_{e}_{sin2theta}{gamma_p_label}.npz'
+    
+    if RingArea:
+        fEdep = f'TotalEdepScint/{threshR}m/RingArea/{area_m2}sqm/{p}_{e}_{sin2theta}.npz'
     
     # load data
     fileRadE = np.load(fRadE, allow_pickle=True)
@@ -77,7 +82,7 @@ for p in particles:
     for e in energies:
         for z in sin2thetas:
             try:
-                df_bin = load_data_as_df (p, e, z, threshR, Xmaxfiltering)
+                df_bin = load_data_as_df (p, e, z, threshR, Xmaxfiltering, RingArea = RingArea)
                 all_df.append(df_bin)
             except FileNotFoundError:
                 continue 
@@ -86,8 +91,12 @@ for p in particles:
 final_df = pd.concat(all_df, ignore_index=True)
 final_df.replace([np.inf, -np.inf], np.nan, inplace=True) #replace inf values with nan
 final_df.dropna(inplace=True) # remove all nans
-# final_df.to_parquet(f'data_for_regression_{threshR}_Xmax_{Xmaxfiltering}_NmuNorm_{NmuNorm}.parquet', index=False)
-final_df.to_parquet(f'DataForRegression/data_for_regression_{threshR}_Xmax_{Xmaxfiltering}.parquet', index=False)
+
+if RingArea:
+    final_df.to_parquet(f'DataForRegression/data_for_regression_{threshR}_Xmax_{Xmaxfiltering}_ring_{area_m2}sqm.parquet', index=False)
+else:
+    final_df.to_parquet(f'DataForRegression/data_for_regression_{threshR}_Xmax_{Xmaxfiltering}{gamma_p_label}.parquet', index=False)
+
 # print(final_df.head())
 print(f"Total rows (events): {len(final_df)}/168,000")
 print('file is saved')

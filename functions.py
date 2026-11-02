@@ -24,8 +24,8 @@ import textwrap
 #=====================================
 
 primary = "proton"
-energy = "lgE_17.0"
-sin2theta = "0.4"
+energy = "lgE_18.0"
+sin2theta = "0.2"
 runnum = 0
 
 #%% file path and constants
@@ -707,8 +707,35 @@ def GetConstFromRegression(ThreshR, filteringXmax, NmuNorm):
 	return df_params, df_Nmu
 
 # fitting and return constant array by fitting all data across primaries
-def GetConstFromRegression2(ThreshR, filteringXmax):
-	df = pd.read_parquet(f'DataForRegression/data_for_regression_{ThreshR}_Xmax_{filteringXmax}_constgammaP.parquet')
+def GetConstFromRegression2(ThreshR, filteringXmax, RingArea, area_m2, gammaProb):
+
+	gamma_p_label = {
+    'constant': '_constgammaP',
+    'interpolation': '',
+    'half-constant': '_halfconstgammaP',
+	}[gammaProb]
+
+	if RingArea:
+		path = f'DataForRegression/data_for_regression_{ThreshR}_Xmax_{filteringXmax}_ring_{area_m2}sqm.parquet'
+		df = pd.read_parquet(path)
+		print(rf'processing: {path}')
+	else:
+		path = f'DataForRegression/data_for_regression_{ThreshR}_Xmax_{filteringXmax}{gamma_p_label}.parquet'
+		df = pd.read_parquet(path)
+		print(rf'processing: {path}')
+
+	# # binning energy and zenith angle 
+	# sin2theta = np.round(1 - df['costheta']**2, 1)   # 0.0, 0.1, ..., 0.9
+	# df = df[sin2theta < 0.85].reset_index(drop=True)  # remove sin2 = 0.9 showers
+	# sin2theta = sin2theta[sin2theta < 0.85].reset_index(drop=True)
+
+	# costheta = df['costheta']
+	# energy = df['energy']
+	# particle = df['particle']
+
+	# zenith_bins = np.linspace(0.0, 0.8, 9)            # 0.0 ... 0.8
+	# energy_bins = np.logspace(7.0, 9.0, 21)
+	# particle_bins = ['proton', 'helium', 'oxygen', 'iron']
 
 	# binning energy and zenith angle 
 	costheta = df['costheta']
@@ -1855,7 +1882,8 @@ def pltEdepEkin(primary, energy, sin2theta, run):
 # Plot deposited energy vs primary energy 
 def pltEdepEprim(primary, threshR):
 	energies = [f"lgE_{x/10:.1f}" for x in range(160,181)]
-	sin2theta = [x/10 for x in range(0, 10)]
+	# sin2theta = [x/10 for x in range(0, 10)]
+	sin2theta = [x/10 for x in range(2, 3)]
 	s = 5
 	alpha = 0.3
 	output_dir = f'ScintillatorResponse/'
@@ -2060,7 +2088,14 @@ def pltSpecificBinFit1(sin2_bin, lgE_bin_GeV, particle,filteringXmax,ThreshR,dat
 	# ax4.legend()
 
 #%% plot the resulution og the reconstruction by regression across the primary energies
-def plt_recon_res (df_Nmu, filteringXmax, ThreshR, sin2, savefig = False):
+def plt_recon_res (df_Nmu, filteringXmax, ThreshR, sin2, RingArea, area_m2, gammaProb, savefig = False):
+
+	gamma_p_label = {
+		'constant': '_constgammaP',
+		'interpolation': '',
+		'half-constant': '_halfconstgammaP',
+		}[gammaProb]
+	
 	energy_bins = np.logspace(7.0, 9.0, 21)
 	sin2theta = df_Nmu['sin2theta']
 	energy = df_Nmu['energy']
@@ -2084,8 +2119,13 @@ def plt_recon_res (df_Nmu, filteringXmax, ThreshR, sin2, savefig = False):
 				'iron': 'blue'}
 	particle_bins = ['proton', 'helium', 'oxygen', 'iron']
 
-	titlelabel =  f'removing underground Xmax = {filteringXmax}, R > {ThreshR} m'
-	zenith_label = rf'$\mathrm{{sin^2 \theta = {sin2}}}$'
+	# titlelabel =  f'removing underground Xmax = {filteringXmax}, R > {ThreshR} m'
+	if RingArea:
+		titlelabel = rf'R > {ThreshR} m, Ring Area = {area_m2} m$^2$, $\gamma$-probability = {gammaProb}'
+	else:
+		titlelabel = rf'R > {ThreshR} m, Full Area, $\gamma$-probability = {gammaProb}'
+	zenith = np.arcsin(np.sqrt(sin2))
+	zenith_label = rf'$\mathrm{{sin^2 \theta = {sin2}}}$ ({np.rad2deg(zenith):.2f}$^\circ$)'
 	x_label = rf'$\mathrm{{log}}(E_0 \mathrm{{(eV)}})$'
 
 
@@ -2176,17 +2216,24 @@ def plt_recon_res (df_Nmu, filteringXmax, ThreshR, sin2, savefig = False):
 	ax3.add_artist(leg3)
 	ax3.legend(bbox_to_anchor=(1.01, 0.55), handles=handle_SD_reco, loc='upper left', title= f"log($N_{{\\mu}}^{{recon}}$) - log($N_{{\\mu}}^{{true}}$)")
 	ax3.set_xlabel(x_label)
-	ax3.set_ylim(0,0.18)
+	# ax3.set_ylim(0,0.18)
+	ax3.set_ylim(0,0.7)
 	# ax3.set_ylabel(rf'$\mathrm{{\sigma_{{log(N_{{\mu}}^{{true}})}}}}$')
-	ax3.set_ylabel(rf'width ($\mathrm{{\sigma}}$) of $\mathrm{{log}}(N_{{\mu}})$')
+	ax3.set_ylabel(rf'width ($\mathrm{{\sigma}}$)')
 	ax3.minorticks_on()
-	
+
+	if RingArea:
+		specialLabel = f'_ring_{area_m2}sqm'
+	else:
+		specialLabel = gamma_p_label
 
 	if savefig:
-		fig.savefig(f'figures/regression/{ThreshR}m/{sin2}_bias_reso_constgammaP.png', bbox_inches='tight', dpi=400)
-		fig2.savefig(f'figures/regression/{ThreshR}m/{sin2}_true_recon_constgammaP.png', bbox_inches='tight', dpi=400)
-		fig3.savefig(f'figures/regression/{ThreshR}m/{sin2}_width_NopFe_constgammaP.png', bbox_inches='tight', dpi=400)
-
+		fig.savefig(f'figures/regression/{ThreshR}m/{sin2}_bias_reso{specialLabel}.png', bbox_inches='tight', dpi=400)
+		fig2.savefig(f'figures/regression/{ThreshR}m/{sin2}_true_recon{specialLabel}.png', bbox_inches='tight', dpi=400)
+		fig3.savefig(f'figures/regression/{ThreshR}m/{sin2}_width_NopFe{specialLabel}.png', bbox_inches='tight', dpi=400)
+	# plt.close(fig)
+	# plt.close(fig2)
+	# plt.close(fig3)
 
 
 #%% main plot
